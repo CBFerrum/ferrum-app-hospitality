@@ -1,6 +1,6 @@
 id: hospitality
 name: Hospitality
-version: 0.1.0
+version: 0.1.1
 publisher: cbferrum
 summary: "A hotel's front office: rooms, rate plans, stays from reservation to check-out, folios and the night audit"
 description: README.md
