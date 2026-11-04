@@ -1,0 +1,211 @@
+- name: HotelProperty
+  label: Property
+  label_plural: Properties
+  kind: master
+  module: hospitality
+  title_field: property_name
+  description: A hotel. Its business date is the night the front office is in; the night audit closes it and opens the next.
+  fields:
+    - {name: property_name, type: data, required: true, in_list: true}
+    - {name: code, type: data, required: true, unique: true, in_list: true, max_length: 20}
+    - {name: company, type: link, to: Company, required: true, in_list: true}
+    - {name: room_item, type: link, to: Item, required: true, label: Room Night Item, description: "What a night's room charge is invoiced as"}
+    - {name: walk_in_customer, type: link, to: Customer, label: Walk-in Customer, description: "Invoices of guests without a customer of their own go to it"}
+    - {name: check_in_time, type: data, default: "14:00", max_length: 5}
+    - {name: check_out_time, type: data, default: "11:00", max_length: 5}
+    - {name: business_date, type: date, read_only: true, no_copy: true, in_list: true, description: "The night the front office is in. Set it once when the hotel starts; the night audit moves it on"}
+    - {name: address, type: text}
+  actions:
+    - {name: night_audit, label: Run the Night Audit, permission: write, confirm: "This closes the business date: room charges are posted to every stay in the house, reservations that did not arrive become no-shows, and the next day opens. Continue?"}
+    - {name: open_business_date, label: Set the Business Date, permission: write, condition: "doc.business_date == null"}
+  form:
+    - {label: Property, fields: [property_name, code, company, address]}
+    - {label: Front Office, fields: [business_date, check_in_time, check_out_time]}
+    - {label: Invoicing, fields: [room_item, walk_in_customer]}
+  list: {columns: [property_name, code, business_date], sort: property_name asc}
+
+- name: RoomType
+  label: Room Type
+  label_plural: Room Types
+  kind: master
+  module: hospitality
+  title_field: room_type_name
+  fields:
+    - {name: room_type_name, type: data, required: true, in_list: true}
+    - {name: property, type: link, to: HotelProperty, required: true, in_list: true, in_filter: true}
+    - {name: capacity, type: int, default: 2, min: 1, in_list: true}
+    - {name: extra_bed_capacity, type: int, default: 0, min: 0}
+    - {name: base_rate, type: currency, required: true, in_list: true, description: "A night's rate on dates no rate plan prices"}
+    - {name: amenities, type: table, of: RoomAmenity}
+  form:
+    - {label: Room Type, fields: [room_type_name, property, capacity, extra_bed_capacity, base_rate]}
+    - {label: Amenities, fields: [amenities]}
+  list: {columns: [room_type_name, property, capacity, base_rate], sort: room_type_name asc}
+
+- name: RoomAmenity
+  label: Amenity
+  kind: child
+  fields:
+    - {name: amenity, type: data, required: true, in_list: true}
+
+- name: Room
+  label: Room
+  label_plural: Rooms
+  kind: master
+  module: hospitality
+  title_field: room_number
+  fields:
+    - {name: room_number, type: data, required: true, in_list: true, max_length: 20}
+    - {name: property, type: link, to: HotelProperty, required: true, in_list: true, in_filter: true}
+    - {name: room_type, type: link, to: RoomType, required: true, in_list: true, in_filter: true}
+    - {name: floor, type: data, max_length: 20}
+    - {name: housekeeping, type: select, options: [Clean, Inspected, Dirty, Out of Order], default: Clean, required: true, in_list: true, in_filter: true}
+    - {name: occupied, type: check, read_only: true, no_copy: true, in_list: true, in_filter: true}
+    - {name: notes, type: text}
+  form:
+    - {label: Room, fields: [room_number, property, room_type, floor]}
+    - {label: Status, fields: [housekeeping, occupied, notes]}
+  list: {columns: [room_number, room_type, housekeeping, occupied], sort: room_number asc}
+
+- name: RatePlan
+  label: Rate Plan
+  label_plural: Rate Plans
+  kind: master
+  module: hospitality
+  title_field: rate_plan_name
+  description: A night's price by room type and season. A night no season covers is the room type's base rate.
+  fields:
+    - {name: rate_plan_name, type: data, required: true, in_list: true}
+    - {name: property, type: link, to: HotelProperty, required: true, in_list: true, in_filter: true}
+    - {name: active, type: check, default: true, in_list: true}
+    - {name: breakfast_included, type: check}
+    - {name: cancellation_policy, type: text}
+    - {name: seasons, type: table, of: RateSeason}
+  form:
+    - {label: Rate Plan, fields: [rate_plan_name, property, active, breakfast_included, cancellation_policy]}
+    - {label: Seasons, fields: [seasons]}
+  list: {columns: [rate_plan_name, property, active], sort: rate_plan_name asc}
+
+- name: RateSeason
+  label: Season
+  kind: child
+  fields:
+    - {name: room_type, type: link, to: RoomType, required: true, in_list: true}
+    - {name: from_date, type: date, required: true, in_list: true}
+    - {name: to_date, type: date, required: true, in_list: true}
+    - {name: rate, type: currency, required: true, in_list: true}
+
+- name: Stay
+  label: Stay
+  label_plural: Stays
+  kind: master
+  module: hospitality
+  title_field: guest_name
+  search_fields: [number, guest_email, guest_phone]
+  description: A guest's reservation, from booking through check-in to check-out. Its room is held for its nights, and no room type is sold past its rooms.
+  fields:
+    - {name: property, type: link, to: HotelProperty, required: true, in_list: true, in_filter: true}
+    - {name: guest_name, type: data, required: true, in_list: true}
+    - {name: guest_email, type: email}
+    - {name: guest_phone, type: phone}
+    - {name: customer, type: link, to: Customer, description: "Who the invoice goes to; the property's walk-in customer when empty"}
+    - {name: arrival, type: date, required: true, in_list: true, in_filter: true}
+    - {name: departure, type: date, required: true, in_list: true}
+    - {name: nights, type: int, read_only: true}
+    - {name: adults, type: int, default: 1, min: 1}
+    - {name: children, type: int, default: 0, min: 0}
+    - {name: room_type, type: link, to: RoomType, required: true, in_list: true, in_filter: true}
+    - {name: room, type: link, to: Room, in_list: true}
+    - {name: rate_plan, type: link, to: RatePlan}
+    - {name: total, type: currency, read_only: true, description: "The nights at their rates, as priced when booked"}
+    - {name: status, type: select, options: [Reserved, Checked In, Checked Out, Cancelled, No Show], default: Reserved, read_only: true, no_copy: true, in_list: true, in_filter: true}
+    - {name: checked_in_at, type: datetime, read_only: true, no_copy: true}
+    - {name: checked_out_at, type: datetime, read_only: true, no_copy: true}
+    - {name: folio, type: link, to: Folio, read_only: true, no_copy: true}
+    - {name: sales_invoice, type: link, to: SalesInvoice, read_only: true, no_copy: true}
+    - {name: cancellation_reason, type: text, read_only: true, no_copy: true}
+    - {name: notes, type: text}
+  actions:
+    - {name: check_in, label: Check In, permission: write, condition: "doc.status == 'Reserved'"}
+    - {name: check_out, label: Check Out, permission: write, condition: "doc.status == 'Checked In'", confirm: "The folio closes and its invoice is made. Continue?"}
+    - {name: cancel_stay, label: Cancel the Reservation, permission: write, condition: "doc.status == 'Reserved'"}
+  form:
+    - {label: Guest, fields: [property, guest_name, guest_email, guest_phone, customer]}
+    - {label: Stay, fields: [arrival, departure, nights, adults, children]}
+    - {label: Room, fields: [room_type, room, rate_plan, total]}
+    - {label: Status, fields: [status, checked_in_at, checked_out_at, folio, sales_invoice, cancellation_reason]}
+    - {label: Notes, collapsible: true, fields: [notes]}
+  numbering: {template: "STAY-{YYYY}-{seq:5}"}
+  list: {columns: [number, guest_name, arrival, departure, room_type, room, status], sort: arrival desc}
+
+- name: Folio
+  label: Folio
+  label_plural: Folios
+  kind: master
+  module: hospitality
+  title_field: guest_name
+  description: A stay's account while the guest is in the house. The night audit posts each night's room; the front desk adds what else the guest had and what they paid. Checking out closes it and invoices it.
+  fields:
+    - {name: stay, type: link, to: Stay, required: true, read_only: true, in_list: true}
+    - {name: property, type: link, to: HotelProperty, read_only: true, in_filter: true}
+    - {name: guest_name, type: data, read_only: true, in_list: true}
+    - {name: guest_email, type: email, read_only: true}
+    - {name: status, type: select, options: [Open, Closed], default: Open, read_only: true, no_copy: true, in_list: true, in_filter: true}
+    - {name: charges, type: table, of: FolioCharge}
+    - {name: payments, type: table, of: FolioPayment}
+    - {name: total_charges, type: currency, read_only: true, in_list: true}
+    - {name: total_payments, type: currency, read_only: true}
+    - {name: balance, type: currency, read_only: true, in_list: true}
+  form:
+    - {label: Folio, fields: [stay, property, guest_name, status]}
+    - {label: Charges, fields: [charges]}
+    - {label: Payments, fields: [payments]}
+    - {label: Totals, fields: [total_charges, total_payments, balance]}
+  numbering: {template: "FOL-{YYYY}-{seq:5}"}
+  list: {columns: [number, guest_name, status, total_charges, balance], sort: created_at desc}
+
+- name: FolioCharge
+  label: Charge
+  kind: child
+  fields:
+    - {name: charge_date, type: date, required: true, in_list: true}
+    - {name: kind, type: select, options: [Room, Service, Adjustment], default: Service, required: true, in_list: true}
+    - {name: description, type: data, required: true, in_list: true}
+    - {name: item, type: link, to: Item, in_list: true, description: "What it is invoiced as; a room night is the property's room item"}
+    - {name: qty, type: decimal, default: 1, in_list: true}
+    - {name: rate, type: currency, required: true, in_list: true}
+    - {name: amount, type: currency, read_only: true, in_list: true}
+
+- name: FolioPayment
+  label: Payment
+  kind: child
+  fields:
+    - {name: paid_on, type: date, required: true, in_list: true}
+    - {name: amount, type: currency, required: true, in_list: true}
+    - {name: mode, type: data, in_list: true}
+    - {name: reference, type: data, in_list: true}
+
+- name: NightAudit
+  label: Night Audit
+  label_plural: Night Audits
+  kind: master
+  module: hospitality
+  title_field: business_date
+  description: What one business date closed with, kept as the night audit left it.
+  fields:
+    - {name: property, type: link, to: HotelProperty, required: true, read_only: true, in_list: true, in_filter: true}
+    - {name: business_date, type: date, required: true, read_only: true, in_list: true}
+    - {name: rooms_available, type: int, read_only: true, in_list: true}
+    - {name: rooms_occupied, type: int, read_only: true, in_list: true}
+    - {name: occupancy_percent, type: percent, read_only: true, in_list: true}
+    - {name: room_revenue, type: currency, read_only: true, in_list: true}
+    - {name: average_daily_rate, type: currency, read_only: true, label: ADR}
+    - {name: revpar, type: currency, read_only: true, label: RevPAR}
+    - {name: charges_posted, type: int, read_only: true}
+    - {name: no_shows, type: int, read_only: true}
+    - {name: run_by, type: data, read_only: true}
+  form:
+    - {label: Night, fields: [property, business_date, run_by]}
+    - {label: Rooms, fields: [rooms_available, rooms_occupied, occupancy_percent, no_shows, charges_posted]}
+    - {label: Revenue, fields: [room_revenue, average_daily_rate, revpar]}
+  list: {columns: [business_date, property, occupancy_percent, room_revenue, average_daily_rate, revpar], sort: business_date desc}

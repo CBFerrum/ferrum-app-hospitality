@@ -1,0 +1,55 @@
+package: hospitality
+version: 0.1.0
+label: Hospitality
+description: "A hotel's front office: properties, room types and rooms, rate plans, stays from reservation to check-out, folios and the night audit"
+depends: [core, selling, accounting]
+
+modules:
+  - name: hospitality
+    label: Hospitality
+    icon: bed-double
+    order: 47
+    items: [Stay, Folio, Room, RoomType, RatePlan, HotelProperty, NightAudit]
+
+# What a personal-data request exports and erases for a guest (their email): who stayed and how to
+# reach them; the nights and charges stay, as the books need them.
+personal_data:
+  - {entity: Stay, match: guest_email, erase: [guest_name, guest_email, guest_phone, notes]}
+  - {entity: Folio, match: guest_email, erase: [guest_name, guest_email]}
+
+roles:
+  - name: Hotel Manager
+    description: Runs the property — rooms, rate plans, every stay and folio, and the night audit.
+    permissions:
+      - {entity: HotelProperty, read: true, write: true, create: true, export: true}
+      - {entity: RoomType, read: true, write: true, create: true, delete: true, export: true, import: true}
+      - {entity: Room, read: true, write: true, create: true, delete: true, export: true, import: true}
+      - {entity: RatePlan, read: true, write: true, create: true, delete: true, export: true}
+      - {entity: Stay, read: true, write: true, create: true, export: true}
+      - {entity: Folio, read: true, write: true, export: true}
+      - {entity: NightAudit, read: true, export: true}
+      - {entity: Customer, read: true, write: true, create: true}
+      - {entity: Item, read: true}
+      - {entity: Company, read: true}
+      - {entity: SalesInvoice, read: true, create: true}
+  - name: Front Desk
+    description: Takes reservations, checks guests in and out, and keeps their folios.
+    permissions:
+      - {entity: HotelProperty, read: true}
+      - {entity: RoomType, read: true}
+      - {entity: Room, read: true}
+      - {entity: RatePlan, read: true}
+      - {entity: Stay, read: true, write: true, create: true}
+      - {entity: Folio, read: true, write: true}
+      - {entity: NightAudit, read: true}
+      - {entity: Customer, read: true, create: true}
+      - {entity: Item, read: true}
+      - {entity: Company, read: true}
+      - {entity: SalesInvoice, read: true, create: true}
+  - name: Housekeeping
+    description: Keeps rooms' housekeeping status, and sees who is in which room.
+    permissions:
+      - {entity: HotelProperty, read: true}
+      - {entity: RoomType, read: true}
+      - {entity: Room, read: true, write: true}
+      - {entity: Stay, read: true}
