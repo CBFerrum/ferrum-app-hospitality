@@ -1,0 +1,29 @@
+/* Ferrum-Frontend's stylesheet (the kit's look and Tailwind), with the classes of the kit's
+   components and of this app's files. */
+@import "../../../ferrum/web/src/index.css";
+@source "../../../ferrum/web/src";
+@source ".";
+
+.hotel-page {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.hotel-columns {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.hotel-rooms {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+}
+
+.hotel-room {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}

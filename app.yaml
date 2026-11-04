@@ -1,0 +1,33 @@
+id: hospitality
+name: Hospitality
+version: 0.1.0
+publisher: cbferrum
+summary: "A hotel's front office: rooms, rate plans, stays from reservation to check-out, folios and the night audit"
+description: README.md
+categories: [sales, industry]
+license: AGPL-3.0-only
+homepage: https://github.com/CBFerrum/ferrum-app-hospitality
+support: https://github.com/CBFerrum/ferrum-app-hospitality/issues
+runtime: native
+platform: ">=0.3.2, <0.4"
+# Records of ERP (items, customers, invoices): installing it installs ERP.
+requires: {erp: ">=0.1"}
+packages: [hospitality]
+uninstall: ask
+# Its own interface at /hotel/: the front desk (arrivals, in the house, departures), the rooms, and
+# the records frame for everything else (ui/, built into ui/dist).
+ui:
+  dist: ui/dist
+contributes:
+  shell.app:
+    - id: hospitality
+      route: hotel
+      title: Hotel
+      description: The front desk, rooms, stays and the night audit
+      icon: bed-double
+      color: "#9a3412"
+      roles: [Hotel Manager, Front Desk, Housekeeping]
+  shell.open:
+    - {id: hospitality, package: hospitality, path: "hotel/e/{entity}/{id}", list: "hotel/e/{entity}"}
+  shell.create:
+    - {id: stay, label: Stay, path: hotel/e/Stay/new, entity: Stay}
