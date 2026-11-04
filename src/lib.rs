@@ -15,8 +15,9 @@ mod folio;
 mod stay;
 
 use chrono::NaiveDate;
+use ferrum_domain::reports::ReportSource;
 use ferrum_domain::util::s;
-use ferrum_kernel::{Doc, HookRegistry};
+use ferrum_kernel::{Doc, HookRegistry, Kernel, Result};
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -38,6 +39,16 @@ pub fn register(hooks: &mut HookRegistry) {
         .register("Room", Arc::new(stay::RoomHook))
         .register("Folio", Arc::new(folio::FolioHook))
         .register("HotelProperty", Arc::new(audit::PropertyHook));
+}
+
+/// This app's reports: none of its own, as the night audits are its figures (occupancy, ADR, RevPAR).
+pub fn reports() -> Vec<Arc<dyn ReportSource>> {
+    vec![]
+}
+
+/// Upkeep: nothing runs by itself. The night audit is the front office's to run.
+pub async fn maintenance(_k: &Kernel) -> Result<()> {
+    Ok(())
 }
 
 /// A date field.
