@@ -34,7 +34,7 @@ impl DocHook for PropertyHook {
                     .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
                     .ok_or_else(|| Error::field("date", "the hotel's first business date, YYYY-MM-DD"))?;
                 hc.kernel.set_values_tx(&elevated(hc.ctx), hc.tx, "HotelProperty", property, obj(json!({"business_date": day.to_string()}))).await?;
-                Ok(Some(json!({"business_date": day})))
+                Ok(Some(json!({"business_date": day, "message": format!("The business date is {day}")})))
             }
             "night_audit" => Ok(Some(run(hc, doc).await?)),
             _ => Ok(None),
@@ -124,6 +124,11 @@ async fn run(hc: &mut HookCtx<'_>, doc: &Doc) -> Result<Value> {
         .await?;
     let next = night + Duration::days(1);
     hc.kernel.set_values_tx(&system, hc.tx, "HotelProperty", property, obj(json!({"business_date": next.to_string()}))).await?;
+    let message = format!(
+        "The night of {night} is closed: {occupied} of {available} rooms occupied, {posted} room charge{} posted, {no_shows} no-show{}; the business date is {next}",
+        if posted == 1 { "" } else { "s" },
+        if no_shows == 1 { "" } else { "s" }
+    );
     Ok(json!({"night": night, "next": next, "charges_posted": posted, "no_shows": no_shows, "rooms_occupied": occupied, "rooms_available": available,
-              "room_revenue": money(revenue), "audit": audit.get("id")}))
+              "room_revenue": money(revenue), "audit": audit.get("id"), "message": message}))
 }

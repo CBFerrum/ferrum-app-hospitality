@@ -168,8 +168,19 @@ async fn scenario() {
                    "seasons": [{"room_type": deluxe.to_string(), "from_date": d0, "to_date": "2026-12-31", "rate": "5000"}]}),
         )
         .await);
+    // What the actions read, their pages ask for: the first business date, the room, why a
+    // reservation is cancelled.
+    let asks = |entity: &str, action: &str| -> Vec<String> {
+        let ent = t.admin.schema.entity(entity).unwrap();
+        ent.def.actions.iter().find(|a| a.name == action).unwrap().params.iter().map(|p| p.name.clone()).collect()
+    };
+    assert_eq!(
+        (asks("HotelProperty", "open_business_date"), asks("Stay", "check_in"), asks("Stay", "cancel_stay")),
+        (vec!["date".to_string()], vec!["room".to_string()], vec!["reason".to_string()])
+    );
     refused(t.act(&manager, "HotelProperty", hid, "night_audit", Value::Null).await, "invalid", "business date first");
-    t.act(&manager, "HotelProperty", hid, "open_business_date", json!({"date": d0})).await.expect("the first business date");
+    let opened = t.act(&manager, "HotelProperty", hid, "open_business_date", json!({"date": d0})).await.expect("the first business date");
+    assert_eq!(opened["message"], "The business date is 2026-12-01");
     refused(t.act(&manager, "HotelProperty", hid, "open_business_date", json!({"date": d1})).await, "invalid", "not available");
 
     // ───────────── reservations ─────────────
@@ -214,6 +225,7 @@ async fn scenario() {
     t.k.update(&keeper, "Room", r101, obj(json!({"housekeeping": "Inspected"})), None).await.unwrap();
     let inn = t.act(&desk, "Stay", ana_id, "check_in", json!({"room": r101.to_string()})).await.expect("checked in");
     assert_eq!(inn["status"], "Checked In");
+    assert!(inn["message"].as_str().unwrap().starts_with("Checked in to room 101; folio FOL-"), "{inn}");
     let ana = t.get("Stay", ana_id).await;
     let folio = uid(&obj(json!({"id": ana["folio"]})));
     assert!(t.get("Room", r101).await["occupied"].as_bool().unwrap(), "the room is taken");
@@ -246,6 +258,7 @@ async fn scenario() {
     refused(t.act(&desk, "HotelProperty", hid, "night_audit", Value::Null).await, "forbidden", "");
     let night = t.act(&manager, "HotelProperty", hid, "night_audit", Value::Null).await.expect("the night audit");
     assert_eq!((night["charges_posted"].as_i64(), night["no_shows"].as_i64(), night["next"].as_str()), (Some(1), Some(1), Some(d1)), "{night}");
+    assert_eq!(night["message"], "The night of 2026-12-01 is closed: 1 of 4 rooms occupied, 1 room charge posted, 1 no-show; the business date is 2026-12-02");
     assert_eq!(t.get("Stay", bo).await["status"], "No Show", "Bo never arrived");
     let audit = t.find_one("NightAudit", json!({"business_date": d0})).await;
     assert_eq!(
@@ -312,6 +325,24 @@ async fn scenario() {
     );
     let ana = t.get("Stay", ana_id).await;
     assert_eq!((ana["status"].as_str(), ana["sales_invoice"].as_str()), (Some("Checked Out"), Some(invoice.to_string().as_str())));
+    // What Ana paid at the desk goes to ERP: a draft payment from her customer into the takings
+    // account (the company's cash account here), for accounts to apply to the invoice.
+    assert!(out["message"].as_str().unwrap().ends_with("; 2000.00 paid at the desk waits in ERP as draft payments to apply to it"), "{out}");
+    let paid = &t.get("Folio", folio).await["payments"][0];
+    let pe = t.get("PaymentEntry", uid(&obj(json!({"id": paid["payment_entry"]})))).await;
+    assert_eq!(
+        (
+            pe["docstatus"].as_i64(),
+            pe["payment_type"].as_str(),
+            pe["customer"].as_str(),
+            dec(&pe["paid_amount"]),
+            pe["reference_no"].as_str(),
+            pe["posting_date"].as_str()
+        ),
+        (Some(0), Some("Receive"), Some(meera.to_string().as_str()), 2000.0, Some("AUTH-1"), Some(d0))
+    );
+    let cash = t.get("Company", company).await["default_cash_account"].clone();
+    assert_eq!(pe["bank_account"], cash);
     assert_eq!(t.get("Folio", folio).await["status"], "Closed");
     let r = t.get("Room", r101).await;
     assert_eq!((r["occupied"].as_bool(), r["housekeeping"].as_str()), (Some(false), Some("Dirty")), "it needs cleaning");
@@ -319,12 +350,14 @@ async fn scenario() {
     refused(t.k.update(&desk, "Stay", ana_id, obj(json!({"departure": d3})), None).await, "invalid", "checked out does not change");
     // Dee had no customer: her folio goes to the walk-in customer.
     let out = t.act(&desk, "Stay", dee, "check_out", Value::Null).await.expect("Dee leaves early");
+    assert!(!out["message"].as_str().unwrap().contains("paid at the desk"), "nothing was paid: {out}");
     let inv = t.get("SalesInvoice", uid(&obj(json!({"id": out["sales_invoice"]["id"]})))).await;
     assert_eq!(inv["customer"].as_str(), Some(walk_in.to_string().as_str()));
 
     // ───────────── cancellation frees the night ─────────────
     refused(t.act(&desk, "Stay", cy, "cancel_stay", json!({})).await, "invalid", "say why");
-    t.act(&desk, "Stay", cy, "cancel_stay", json!({"reason": "plans changed"})).await.expect("cancelled");
+    let cancelled = t.act(&desk, "Stay", cy, "cancel_stay", json!({"reason": "plans changed"})).await.expect("cancelled");
+    assert_eq!(cancelled["message"], "The reservation is cancelled; its nights are free again");
     assert_eq!(t.get("Stay", cy).await["status"], "Cancelled");
     let two = t.insert(&desk, "Stay", stay("Fay Gill", deluxe, d2, d3, json!({}))).await;
     t.insert(&desk, "Stay", stay("Gus Hale", deluxe, d2, d3, json!({}))).await;
