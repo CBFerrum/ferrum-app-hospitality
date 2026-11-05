@@ -19,6 +19,11 @@ const MAX_NIGHTS: i64 = 366;
 /// Holding a room: the stay is booked or in the house.
 const ACTIVE: &[&str] = &["Reserved", "Checked In"];
 
+/// An amount as people read it.
+fn money_text(v: Decimal) -> String {
+    format!("{v:.2}")
+}
+
 /// One night's price for a room type: the rate plan's season that covers it when the plan is
 /// active, else the type's base rate.
 pub(crate) async fn night_rate(tx: &mut Tx, tenant: Uuid, room_type: Uuid, plan: Option<Uuid>, night: NaiveDate) -> Result<Decimal> {
@@ -299,11 +304,17 @@ async fn check_in(hc: &mut HookCtx<'_>, doc: &Doc, params: &Value) -> Result<Val
         )
         .await?;
     hc.kernel.set_values_tx(&system, hc.tx, "Room", room, obj(json!({"occupied": true}))).await?;
-    Ok(json!({"status": "Checked In", "folio": created("Folio", &folio)}))
+    let number: Option<String> =
+        sqlx::query_scalar("select room_number from e_room where tenant_id = $1 and id = $2").bind(tenant).bind(room).fetch_optional(&mut **hc.tx).await?;
+    let message = format!("Checked in to room {}; folio {} is open", number.unwrap_or_default(), s(&folio, "number").unwrap_or_default());
+    Ok(json!({"status": "Checked In", "folio": created("Folio", &folio), "message": message}))
 }
 
 /// `check_out`: the guest leaves. The folio closes and its charges are invoiced (a draft Sales
-/// Invoice) to the stay's customer or the property's walk-in customer; the room needs cleaning.
+/// Invoice) to the stay's customer or the property's walk-in customer; what they paid at the desk
+/// goes to ERP too, each payment a draft Payment Entry from that customer into the property's
+/// takings account, for accounts to apply to the invoice once it is submitted (until then the
+/// books did not know of it). The room needs cleaning.
 async fn check_out(hc: &mut HookCtx<'_>, doc: &Doc) -> Result<Value> {
     let tenant = hc.ctx.tenant;
     let stay = id(doc, "id").ok_or_else(|| Error::internal("a stay without an id"))?;
@@ -313,19 +324,24 @@ async fn check_out(hc: &mut HookCtx<'_>, doc: &Doc) -> Result<Value> {
     let folio = hc.kernel.get_tx(&system, hc.tx, "Folio", folio_id, true).await?;
     let prop = hc.kernel.get_tx(&system, hc.tx, "HotelProperty", property, false).await?;
     let charges = rows(&folio, "charges");
-    let invoice = if charges.is_empty() {
-        None
-    } else {
-        let customer = id(doc, "customer")
+    let mut payments = rows(&folio, "payments");
+    let customer = || {
+        id(doc, "customer")
             .or(id(&prop, "walk_in_customer"))
-            .ok_or_else(|| Error::invalid("give the stay a customer, or the property a walk-in customer, to invoice the folio"))?;
-        let company = id(&prop, "company").ok_or_else(|| Error::invalid("the property has no company"))?;
-        let currency: Option<Uuid> = sqlx::query_scalar("select default_currency from e_company where tenant_id = $1 and id = $2")
+            .ok_or_else(|| Error::invalid("give the stay a customer, or the property a walk-in customer, to invoice the folio"))
+    };
+    let company = id(&prop, "company").ok_or_else(|| Error::invalid("the property has no company"))?;
+    let (currency, cash, bank): (Option<Uuid>, Option<Uuid>, Option<Uuid>) =
+        sqlx::query_as("select default_currency, default_cash_account, default_bank_account from e_company where tenant_id = $1 and id = $2")
             .bind(tenant)
             .bind(company)
             .fetch_optional(&mut **hc.tx)
             .await?
-            .flatten();
+            .unwrap_or_default();
+    let invoice = if charges.is_empty() {
+        None
+    } else {
+        let customer = customer()?;
         let room_item = id(&prop, "room_item");
         let mut items = Vec::new();
         for c in &charges {
@@ -345,6 +361,38 @@ async fn check_out(hc: &mut HookCtx<'_>, doc: &Doc) -> Result<Value> {
         .await?;
         Some(inv)
     };
+    let mut handed = Decimal::ZERO;
+    if payments.iter().any(|p| id(p, "payment_entry").is_none()) {
+        let customer = customer()?;
+        let takings = id(&prop, "takings_account")
+            .or(cash)
+            .or(bank)
+            .ok_or_else(|| Error::invalid("set the property's takings account (or the company's default cash account) to hand its payments to ERP"))?;
+        for p in payments.iter_mut().filter(|p| id(p, "payment_entry").is_none()) {
+            let reference = s(p, "reference").or(s(&folio, "number")).unwrap_or_default().to_string();
+            let remarks = format!(
+                "Paid at the front desk{} for stay {}, folio {}",
+                s(p, "mode").map(|m| format!(" ({m})")).unwrap_or_default(),
+                s(doc, "number").unwrap_or_default(),
+                s(&folio, "number").unwrap_or_default()
+            );
+            let pe = hc
+                .kernel
+                .insert_tx(
+                    &system,
+                    hc.tx,
+                    "PaymentEntry",
+                    obj(json!({"company": company.to_string(), "posting_date": s(p, "paid_on"), "payment_type": "Receive", "customer": customer.to_string(),
+                               "bank_account": takings.to_string(), "currency": currency.map(|c| c.to_string()), "paid_amount": money(d(p, "amount")),
+                               "reference_no": reference, "reference_date": s(p, "paid_on"), "remarks": remarks})),
+                )
+                .await?;
+            handed += d(p, "amount");
+            set(p, "payment_entry", pe.get("id").cloned().unwrap_or(Value::Null));
+        }
+        let patch = obj(json!({"payments": payments.iter().cloned().map(Value::Object).collect::<Vec<_>>()}));
+        hc.kernel.update_tx(&system, hc.tx, "Folio", folio_id, patch, None).await?;
+    }
     hc.kernel.set_values_tx(&system, hc.tx, "Folio", folio_id, obj(json!({"status": "Closed"}))).await?;
     let mut values = obj(json!({"status": "Checked Out", "checked_out_at": Utc::now().to_rfc3339()}));
     if let Some(inv) = &invoice {
@@ -354,7 +402,14 @@ async fn check_out(hc: &mut HookCtx<'_>, doc: &Doc) -> Result<Value> {
     if let Some(room) = id(doc, "room") {
         hc.kernel.set_values_tx(&system, hc.tx, "Room", room, obj(json!({"occupied": false, "housekeeping": "Dirty"}))).await?;
     }
-    Ok(json!({"status": "Checked Out", "sales_invoice": invoice.as_ref().map(|i| created("SalesInvoice", i))}))
+    let mut message = match &invoice {
+        Some(inv) => format!("Checked out: the folio is invoiced as a draft, {}", money_text(d(inv, "grand_total"))),
+        None => "Checked out: the folio had no charges".to_string(),
+    };
+    if !handed.is_zero() {
+        message.push_str(&format!("; {} paid at the desk waits in ERP as draft payments to apply to it", money_text(handed)));
+    }
+    Ok(json!({"status": "Checked Out", "sales_invoice": invoice.as_ref().map(|i| created("SalesInvoice", i)), "message": message}))
 }
 
 /// `cancel_stay {reason}`: a reservation that will not come; its nights are free again.
@@ -362,7 +417,7 @@ async fn cancel(hc: &mut HookCtx<'_>, doc: &Doc, params: &Value) -> Result<Value
     let stay = id(doc, "id").ok_or_else(|| Error::internal("a stay without an id"))?;
     let reason = params.get("reason").and_then(Value::as_str).map(str::trim).filter(|r| !r.is_empty()).ok_or_else(|| Error::field("reason", "say why"))?;
     hc.kernel.set_values_tx(&elevated(hc.ctx), hc.tx, "Stay", stay, obj(json!({"status": "Cancelled", "cancellation_reason": reason}))).await?;
-    Ok(json!({"status": "Cancelled"}))
+    Ok(json!({"status": "Cancelled", "message": "The reservation is cancelled; its nights are free again"}))
 }
 
 /// A room's type is one of its property's.

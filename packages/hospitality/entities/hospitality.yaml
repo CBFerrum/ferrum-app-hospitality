@@ -11,17 +11,23 @@
     - {name: company, type: link, to: Company, required: true, in_list: true}
     - {name: room_item, type: link, to: Item, required: true, label: Room Night Item, description: "What a night's room charge is invoiced as"}
     - {name: walk_in_customer, type: link, to: Customer, label: Walk-in Customer, description: "Invoices of guests without a customer of their own go to it"}
+    - {name: takings_account, type: link, to: Account, link_filters: {is_group: false}, label: Takings Account, description: "Where payments taken at the front desk are received in ERP; the company's default cash account when empty"}
     - {name: check_in_time, type: data, default: "14:00", max_length: 5}
     - {name: check_out_time, type: data, default: "11:00", max_length: 5}
     - {name: business_date, type: date, read_only: true, no_copy: true, in_list: true, description: "The night the front office is in. Set it once when the hotel starts; the night audit moves it on"}
     - {name: address, type: text}
   actions:
     - {name: night_audit, label: Run the Night Audit, permission: write, confirm: "This closes the business date: room charges are posted to every stay in the house, reservations that did not arrive become no-shows, and the next day opens. Continue?"}
-    - {name: open_business_date, label: Set the Business Date, permission: write, condition: "doc.business_date == null"}
+    - name: open_business_date
+      label: Set the Business Date
+      permission: write
+      condition: "doc.business_date == null"
+      params:
+        - {name: date, type: date, label: First Business Date, required: true, description: "The night the front office starts in; the night audit moves it on from there"}
   form:
     - {label: Property, fields: [property_name, code, company, address]}
     - {label: Front Office, fields: [business_date, check_in_time, check_out_time]}
-    - {label: Invoicing, fields: [room_item, walk_in_customer]}
+    - {label: Invoicing, fields: [room_item, walk_in_customer, takings_account]}
   list: {columns: [property_name, code, business_date], sort: property_name asc}
 
 - name: RoomType
@@ -126,9 +132,19 @@
     - {name: cancellation_reason, type: text, read_only: true, no_copy: true}
     - {name: notes, type: text}
   actions:
-    - {name: check_in, label: Check In, permission: write, condition: "doc.status == 'Reserved'"}
+    - name: check_in
+      label: Check In
+      permission: write
+      condition: "doc.status == 'Reserved'"
+      params:
+        - {name: room, type: link, to: Room, label: Room, description: "The guest's room; the stay's own when empty"}
     - {name: check_out, label: Check Out, permission: write, condition: "doc.status == 'Checked In'", confirm: "The folio closes and its invoice is made. Continue?"}
-    - {name: cancel_stay, label: Cancel the Reservation, permission: write, condition: "doc.status == 'Reserved'"}
+    - name: cancel_stay
+      label: Cancel the Reservation
+      permission: write
+      condition: "doc.status == 'Reserved'"
+      params:
+        - {name: reason, type: text, label: Reason, required: true}
   form:
     - {label: Guest, fields: [property, guest_name, guest_email, guest_phone, customer]}
     - {label: Stay, fields: [arrival, departure, nights, adults, children]}
@@ -144,7 +160,7 @@
   kind: master
   module: hospitality
   title_field: guest_name
-  description: A stay's account while the guest is in the house. The night audit posts each night's room; the front desk adds what else the guest had and what they paid. Checking out closes it and invoices it.
+  description: A stay's account while the guest is in the house. The night audit posts each night's room; the front desk adds what else the guest had and what they paid. Checking out closes it, invoices its charges and hands its payments to ERP for accounts to apply to the invoice.
   fields:
     - {name: stay, type: link, to: Stay, required: true, read_only: true, in_list: true}
     - {name: property, type: link, to: HotelProperty, read_only: true, in_filter: true}
@@ -184,6 +200,7 @@
     - {name: amount, type: currency, required: true, in_list: true}
     - {name: mode, type: data, in_list: true}
     - {name: reference, type: data, in_list: true}
+    - {name: payment_entry, type: link, to: PaymentEntry, read_only: true, no_copy: true, in_list: true, description: "The payment it was handed to ERP as when the guest checked out"}
 
 - name: NightAudit
   label: Night Audit
