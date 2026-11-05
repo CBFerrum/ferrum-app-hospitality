@@ -14,8 +14,8 @@ modules:
 # What a personal-data request exports and erases for a guest (their email): who stayed and how to
 # reach them; the nights and charges stay, as the books need them.
 personal_data:
-  - {entity: Stay, match: guest_email, erase: [guest_name, guest_email, guest_phone, notes]}
-  - {entity: Folio, match: guest_email, erase: [guest_name, guest_email]}
+  - {entity: Stay, match: guest_email, phone: guest_phone, name: guest_name, erase: [guest_name, guest_email, guest_phone, notes]}
+  - {entity: Folio, match: guest_email, name: guest_name, erase: [guest_name, guest_email]}
 
 roles:
   - name: Hotel Manager
