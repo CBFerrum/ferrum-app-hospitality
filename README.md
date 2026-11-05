@@ -71,6 +71,7 @@ cancellation that frees the night, and who may do what.
 
 | Version | Highlights |
 |---|---|
+| **0.1.2** | Rebuilt with Ferrum-Frontend daeadda: actions say what they did. |
 | **0.1.1** | Rebuilt with Ferrum-Frontend 80ff179: labels name their fields, and linked titles show their titles. |
 | **0.1.0** | Properties, room types and rooms, rate plans by season, stays from reservation to check-out, folios and the night audit (FERRUM-INDUSTRY-001). |
 
