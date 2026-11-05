@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+What the front desk is paid reaches the books: checking out hands each payment on the folio to ERP as a draft Payment Entry from the guest's customer into the property's new Takings Account (the company's default cash account when empty), with its date and reference, for accounts to apply to the invoice once it is submitted; the folio's payment says which entry it became. Until now a deposit was on the folio alone, and the invoice said the guest owed it all. Set the Business Date, Check In and Cancel the Reservation ask for what they need (the first business date, the room, why), which they read but never declared, so the first and the last could not work from their pages. Checking in, out, the night audit and a cancellation say what they did. Rebuilt with Ferrum-Frontend 0f1a544.
+
 ## 0.1.4
 
 Rebuilt with Ferrum-Frontend 00dea07: in a workflow state that names what may change, the other fields show read-only, and the fields the state needs show required.
