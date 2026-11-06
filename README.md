@@ -71,6 +71,7 @@ cancellation that frees the night, and who may do what.
 
 | Version | Highlights |
 |---|---|
+| **0.2.2** | Rebuilt with Ferrum-Frontend 24c3951: times on the workspace's clock; drafts headed as drafts. |
 | **0.2.1** | Rebuilt with Ferrum-Frontend bb60115: empty numbers read as the server reads them; settings open as their record. |
 | **0.2.0** | Payments taken at the desk reach ERP at check-out; the business date, check-in's room and a cancellation's reason are asked for on their pages. |
 | **0.1.4** | Rebuilt with Ferrum-Frontend 00dea07: a workflow state's kept fields are read-only, its needed ones required. |
