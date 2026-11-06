@@ -71,6 +71,7 @@ cancellation that frees the night, and who may do what.
 
 | Version | Highlights |
 |---|---|
+| **0.2.1** | Rebuilt with Ferrum-Frontend bb60115: empty numbers read as the server reads them; settings open as their record. |
 | **0.2.0** | Payments taken at the desk reach ERP at check-out; the business date, check-in's room and a cancellation's reason are asked for on their pages. |
 | **0.1.4** | Rebuilt with Ferrum-Frontend 00dea07: a workflow state's kept fields are read-only, its needed ones required. |
 | **0.1.3** | Personal-data requests find stay records by the person's phone number as well as their email, and list the folio, stay records holding their name apart, for an … |
