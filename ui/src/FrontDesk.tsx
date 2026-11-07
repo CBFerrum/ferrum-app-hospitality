@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
-import { api, docPath, refusal, t } from "@ferrum/client";
+import { api, docPath, refusal, t, isolate } from "@ferrum/client";
 import { Badge, Button, confirmDialog, EmptyState, ErrorState, PageLoading, toast, useShellTitle } from "@ferrum/kit";
 
 interface Property {
@@ -43,7 +43,7 @@ function List({ title, stays, action, onAct }: { title: string; stays: Stay[]; a
   return (
     <section className="card card-pad stack" aria-label={title}>
       <h3>
-        {title} <span className="faint">({stays.length})</span>
+        {isolate(title)} <span className="faint">({stays.length})</span>
       </h3>
       {stays.length === 0 ? (
         <p className="muted">{t("Nobody.")}</p>
@@ -52,14 +52,14 @@ function List({ title, stays, action, onAct }: { title: string; stays: Stay[]; a
           {stays.map((s) => (
             <li key={s.id} className="row" style={{ justifyContent: "space-between", gap: 8 }}>
               <span>
-                <Link to={`/e/Stay/${s.id}`}>{s.guest_name}</Link> <span className="faint">{s.number}</span>
+                <Link to={`/e/Stay/${s.id}`}>{isolate(s.guest_name)}</Link> <span className="faint">{isolate(s.number)}</span>
                 <div className="faint">
-                  {s.arrival} to {s.departure}
+                  {t("{arrival} to {departure}", { arrival: s.arrival, departure: s.departure })}
                 </div>
               </span>
               {action && (
                 <Button size="sm" onClick={() => onAct(s, action.name)}>
-                  {action.label}
+                  {isolate(action.label)}
                 </Button>
               )}
             </li>
@@ -83,7 +83,7 @@ function Desk({ property }: { property: Property }) {
   const move = useMutation({
     mutationFn: ({ stay, name }: { stay: Stay; name: string }) => act("Stay", stay.id, name),
     onSuccess: (_, v) => {
-      toast(v.name === "check_in" ? `${v.stay.guest_name} is in` : `${v.stay.guest_name} has left`);
+      toast(v.name === "check_in" ? t("{guest_name} is in", { guest_name: v.stay.guest_name }) : t("{guest_name} has left", { guest_name: v.stay.guest_name }));
       done();
     },
     onError: (e) => toast(refusal(e), "error"),
@@ -91,7 +91,7 @@ function Desk({ property }: { property: Property }) {
   const audit = useMutation({
     mutationFn: () => act("HotelProperty", property.id, "night_audit"),
     onSuccess: (r) => {
-      toast(`The night of ${String(r.night)} is closed: ${String(r.charges_posted)} rooms charged, ${String(r.no_shows)} no-shows`);
+      toast(t("The night of {value} is closed: {value2} rooms charged, {value3} no-shows", { value: String(r.night), value2: String(r.charges_posted), value3: String(r.no_shows) }));
       done();
     },
     onError: (e) => toast(refusal(e), "error"),
@@ -115,7 +115,7 @@ function Desk({ property }: { property: Property }) {
     <>
       <header className="row" style={{ justifyContent: "space-between" }}>
         <div>
-          <h2>{property.property_name}</h2>
+          <h2>{isolate(property.property_name)}</h2>
           <div className="faint">{t("Business date {bd}", { bd })}</div>
         </div>
         <Button
@@ -123,9 +123,9 @@ function Desk({ property }: { property: Property }) {
           onClick={async () => {
             setOpening(true);
             const ok = await confirmDialog({
-              title: `Close the night of ${bd}?`,
-              message: "Room charges are posted to every stay in the house, reservations that did not arrive become no-shows, and the next day opens.",
-              confirmLabel: "Run the night audit",
+              title: t("Close the night of {bd}?", { bd }),
+              message: t("Room charges are posted to every stay in the house, reservations that did not arrive become no-shows, and the next day opens."),
+              confirmLabel: t("Run the night audit"),
             });
             setOpening(false);
             if (ok) audit.mutate();
@@ -135,18 +135,18 @@ function Desk({ property }: { property: Property }) {
         </Button>
       </header>
       <div className="hotel-columns">
-        <List title={t("Arriving")} stays={arriving} action={{ label: "Check in", name: "check_in" }} onAct={onAct} />
+        <List title={t("Arriving")} stays={arriving} action={{ label: t("Check in"), name: "check_in" }} onAct={onAct} />
         <List title={t("In the house")} stays={inHouse} onAct={onAct} />
-        <List title={t("Leaving")} stays={leaving} action={{ label: "Check out", name: "check_out" }} onAct={onAct} />
+        <List title={t("Leaving")} stays={leaving} action={{ label: t("Check out"), name: "check_out" }} onAct={onAct} />
       </div>
       <section className="card card-pad stack" aria-label={t("Rooms")}>
         <h3>{t("Rooms")}</h3>
         <div className="hotel-rooms">
           {rooms.data.map((r) => (
             <Link key={r.id} className="hotel-room" to={`/e/Room/${r.id}`}>
-              <strong>{r.room_number}</strong>
+              <strong>{isolate(r.room_number)}</strong>
               <div>
-                <Badge tone={TONE[r.housekeeping] ?? "neutral"}>{r.housekeeping}</Badge> {r.occupied ? <Badge tone="blue">{t("Occupied")}</Badge> : null}
+                <Badge tone={TONE[r.housekeeping] ?? "neutral"}>{isolate(r.housekeeping)}</Badge> {r.occupied ? <Badge tone="blue">{t("Occupied")}</Badge> : null}
               </div>
             </Link>
           ))}
@@ -157,7 +157,7 @@ function Desk({ property }: { property: Property }) {
 }
 
 export function FrontDesk() {
-  useShellTitle("Front desk");
+  useShellTitle(t("Front desk"));
   const q = useQuery({ queryKey: ["hotel", "properties"], queryFn: () => rows<Property>("HotelProperty", [], { sort: "property_name asc" }) });
   const [chosen, setChosen] = useState<string | null>(null);
   if (q.isPending) return <PageLoading />;
@@ -177,7 +177,7 @@ export function FrontDesk() {
           <select className="select" value={property.id} onChange={(e) => setChosen(e.target.value)}>
             {q.data.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.property_name}
+                {isolate(p.property_name)}
               </option>
             ))}
           </select>
