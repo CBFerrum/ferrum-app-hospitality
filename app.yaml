@@ -1,6 +1,6 @@
 id: hospitality
 name: Hospitality
-version: 0.2.9
+version: 0.2.10
 publisher: cbferrum
 summary: "A hotel's front office: rooms, rate plans, stays from reservation to check-out, folios and the night audit"
 description: README.md
@@ -31,3 +31,16 @@ contributes:
     - {id: hospitality, package: hospitality, path: "hotel/e/{entity}/{id}", list: "hotel/e/{entity}"}
   shell.create:
     - {id: stay, label: Stay, path: hotel/e/Stay/new, entity: Stay}
+  # What the assistant should know in Hospitality's pages, and what it suggests asking there.
+  shell.assistant:
+    - id: hospitality
+      title: "Hospitality"
+      instructions: >-
+        A Stay is Reserved, Checked In, Checked Out, Cancelled or No Show. Its Folio (Open, Closed) collects room
+        charges and extras (FolioCharge) and payments (FolioPayment). Rates come from the RatePlan and its seasons.
+        The NightAudit closes each business day and posts the night's room charges.
+      suggestions:
+        - "Who arrives today, and who leaves?"
+        - "Which rooms are free tonight?"
+        - "What do open folios still owe?"
+        - "What was last night's occupancy?"
