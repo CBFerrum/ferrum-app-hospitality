@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
-import { api, docPath, refusal } from "@ferrum/client";
+import { api, docPath, refusal, t } from "@ferrum/client";
 import { Badge, Button, confirmDialog, EmptyState, ErrorState, PageLoading, toast, useShellTitle } from "@ferrum/kit";
 
 interface Property {
@@ -46,7 +46,7 @@ function List({ title, stays, action, onAct }: { title: string; stays: Stay[]; a
         {title} <span className="faint">({stays.length})</span>
       </h3>
       {stays.length === 0 ? (
-        <p className="muted">Nobody.</p>
+        <p className="muted">{t("Nobody.")}</p>
       ) : (
         <ul className="stack">
           {stays.map((s) => (
@@ -99,9 +99,9 @@ function Desk({ property }: { property: Property }) {
   const [opening, setOpening] = useState(false);
   if (!bd)
     return (
-      <EmptyState title="The hotel has no business date yet">
-        <p className="muted">Set the first one on the property, with Set the Business Date.</p>
-        <Link to={`/e/HotelProperty/${property.id}`}>Open {property.property_name}</Link>
+      <EmptyState title={t("The hotel has no business date yet")}>
+        <p className="muted">{t("Set the first one on the property, with Set the Business Date.")}</p>
+        <Link to={`/e/HotelProperty/${property.id}`}>{t("Open {property_name}", { property_name: property.property_name })}</Link>
       </EmptyState>
     );
   if (stays.isPending || rooms.isPending) return <PageLoading />;
@@ -116,7 +116,7 @@ function Desk({ property }: { property: Property }) {
       <header className="row" style={{ justifyContent: "space-between" }}>
         <div>
           <h2>{property.property_name}</h2>
-          <div className="faint">Business date {bd}</div>
+          <div className="faint">{t("Business date {bd}", { bd })}</div>
         </div>
         <Button
           loading={audit.isPending || opening}
@@ -131,22 +131,22 @@ function Desk({ property }: { property: Property }) {
             if (ok) audit.mutate();
           }}
         >
-          Run the night audit
+          {t("Run the night audit")}
         </Button>
       </header>
       <div className="hotel-columns">
-        <List title="Arriving" stays={arriving} action={{ label: "Check in", name: "check_in" }} onAct={onAct} />
-        <List title="In the house" stays={inHouse} onAct={onAct} />
-        <List title="Leaving" stays={leaving} action={{ label: "Check out", name: "check_out" }} onAct={onAct} />
+        <List title={t("Arriving")} stays={arriving} action={{ label: "Check in", name: "check_in" }} onAct={onAct} />
+        <List title={t("In the house")} stays={inHouse} onAct={onAct} />
+        <List title={t("Leaving")} stays={leaving} action={{ label: "Check out", name: "check_out" }} onAct={onAct} />
       </div>
-      <section className="card card-pad stack" aria-label="Rooms">
-        <h3>Rooms</h3>
+      <section className="card card-pad stack" aria-label={t("Rooms")}>
+        <h3>{t("Rooms")}</h3>
         <div className="hotel-rooms">
           {rooms.data.map((r) => (
             <Link key={r.id} className="hotel-room" to={`/e/Room/${r.id}`}>
               <strong>{r.room_number}</strong>
               <div>
-                <Badge tone={TONE[r.housekeeping] ?? "neutral"}>{r.housekeeping}</Badge> {r.occupied ? <Badge tone="blue">Occupied</Badge> : null}
+                <Badge tone={TONE[r.housekeeping] ?? "neutral"}>{r.housekeeping}</Badge> {r.occupied ? <Badge tone="blue">{t("Occupied")}</Badge> : null}
               </div>
             </Link>
           ))}
@@ -164,8 +164,8 @@ export function FrontDesk() {
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   if (q.data.length === 0)
     return (
-      <EmptyState title="No property yet">
-        <Link to="/e/HotelProperty/new">Add your hotel</Link>
+      <EmptyState title={t("No property yet")}>
+        <Link to="/e/HotelProperty/new">{t("Add your hotel")}</Link>
       </EmptyState>
     );
   const property = q.data.find((p) => p.id === chosen) ?? q.data[0];
@@ -173,7 +173,7 @@ export function FrontDesk() {
     <div className="hotel-page">
       {q.data.length > 1 && (
         <label className="row" style={{ gap: 8 }}>
-          Property
+          {t("Property")}
           <select className="select" value={property.id} onChange={(e) => setChosen(e.target.value)}>
             {q.data.map((p) => (
               <option key={p.id} value={p.id}>
