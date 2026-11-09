@@ -9,7 +9,7 @@ modules:
     label: Hospitality
     icon: bed-double
     order: 47
-    items: [Stay, Folio, Room, RoomType, RatePlan, HotelProperty, NightAudit]
+    items: [Stay, Folio, HousekeepingTask, RoomCharge, Room, RoomType, RatePlan, HotelProperty, NightAudit]
 
 # What a personal-data request exports and erases for a guest (their email): who stayed and how to
 # reach them; the nights and charges stay, as the books need them.
@@ -28,10 +28,14 @@ roles:
       - {entity: Stay, read: true, write: true, create: true, export: true}
       - {entity: Folio, read: true, write: true, export: true}
       - {entity: NightAudit, read: true, export: true}
+      - {entity: HousekeepingTask, read: true, write: true, export: true}
+      - {entity: RoomCharge, read: true, export: true}
       - {entity: Customer, read: true, write: true, create: true}
       - {entity: Item, read: true}
       - {entity: Company, read: true}
       - {entity: SalesInvoice, read: true, create: true}
+      - {entity: PaymentEntry, read: true, create: true}
+      - {entity: JournalEntry, read: true}
   - name: Front Desk
     description: Takes reservations, checks guests in and out, and keeps their folios.
     permissions:
@@ -42,10 +46,13 @@ roles:
       - {entity: Stay, read: true, write: true, create: true}
       - {entity: Folio, read: true, write: true}
       - {entity: NightAudit, read: true}
+      - {entity: HousekeepingTask, read: true}
+      - {entity: RoomCharge, read: true}
       - {entity: Customer, read: true, create: true}
       - {entity: Item, read: true}
       - {entity: Company, read: true}
       - {entity: SalesInvoice, read: true, create: true}
+      - {entity: PaymentEntry, read: true, create: true}
   - name: Housekeeping
     description: Keeps rooms' housekeeping status, and sees who is in which room.
     permissions:
@@ -53,3 +60,19 @@ roles:
       - {entity: RoomType, read: true}
       - {entity: Room, read: true, write: true}
       - {entity: Stay, read: true}
+      - {entity: HousekeepingTask, read: true, write: true}
+  - name: Housekeeping Supervisor
+    description: Inspects the rooms housekeeping cleaned, so a guest goes only into one that is ready.
+    permissions:
+      - {entity: HotelProperty, read: true}
+      - {entity: RoomType, read: true}
+      - {entity: Room, read: true, write: true}
+      - {entity: Stay, read: true}
+      - {entity: HousekeepingTask, read: true, write: true}
+  - name: Outlet Cashier
+    description: Puts what a guest had at an outlet (the restaurant, the spa) on their room, without seeing their stay or folio.
+    permissions:
+      - {entity: HotelProperty, read: true}
+      - {entity: Room, read: true}
+      - {entity: Item, read: true}
+      - {entity: RoomCharge, read: true, create: true}

@@ -27,3 +27,38 @@
   border-radius: 8px;
   padding: 8px;
 }
+
+/* The public booking page: a column that reads on a phone. */
+.hb-page {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.hb-top {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hb-brand {
+  font-weight: 600;
+}
+
+.hb-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.hb-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.hb-trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

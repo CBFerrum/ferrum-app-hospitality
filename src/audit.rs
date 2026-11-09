@@ -3,7 +3,8 @@
 //! the night's rooms and revenue are kept (occupancy, ADR, RevPAR); and the next day opens. It runs
 //! once a night, and the property's row stays locked while it does.
 
-use crate::stay::{business_date, night_rate};
+use crate::housekeeping::task;
+use crate::stay::{business_date, deposit_left, night_rate};
 use crate::{date, obj};
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDate};
@@ -58,8 +59,8 @@ async fn run(hc: &mut HookCtx<'_>, doc: &Doc) -> Result<Value> {
     let system = elevated(hc.ctx);
     let room_item = id(doc, "room_item");
     // Everyone in the house tonight.
-    let in_house: Vec<(Uuid, Option<Uuid>, Uuid, Option<Uuid>, Option<String>)> = sqlx::query_as(
-        "select s.id, s.folio, s.room_type, s.rate_plan, r.room_number from e_stay s left join e_room r on r.tenant_id = s.tenant_id and r.id = s.room \
+    let in_house: Vec<(Uuid, Option<Uuid>, Uuid, Option<Uuid>, Option<String>, Option<Uuid>, NaiveDate)> = sqlx::query_as(
+        "select s.id, s.folio, s.room_type, s.rate_plan, r.room_number, s.room, s.departure from e_stay s left join e_room r on r.tenant_id = s.tenant_id and r.id = s.room \
          where s.tenant_id = $1 and s.property = $2 and s.status = 'Checked In' and s.arrival <= $3 and s.departure > $3 order by r.room_number, s.id",
     )
     .bind(tenant)
@@ -69,7 +70,7 @@ async fn run(hc: &mut HookCtx<'_>, doc: &Doc) -> Result<Value> {
     .await?;
     let mut posted = 0i64;
     let mut revenue = Decimal::ZERO;
-    for (_stay, folio, room_type, plan, room) in &in_house {
+    for (_stay, folio, room_type, plan, room, _, _) in &in_house {
         let Some(folio) = folio else { continue };
         let rate = night_rate(hc.tx, tenant, *room_type, *plan, night).await?;
         let current = hc.kernel.get_tx(&system, hc.tx, "Folio", *folio, true).await?;
@@ -90,8 +91,14 @@ async fn run(hc: &mut HookCtx<'_>, doc: &Doc) -> Result<Value> {
         .bind(night)
         .fetch_all(&mut **hc.tx)
         .await?;
+    // A no-show's deposit is the hotel's to keep.
     for stay in &missed {
-        hc.kernel.set_values_tx(&system, hc.tx, "Stay", *stay, obj(json!({"status": "No Show"}))).await?;
+        let doc = hc.kernel.get_tx(&system, hc.tx, "Stay", *stay, true).await?;
+        let mut values = obj(json!({"status": "No Show"}));
+        if let Some((_, more, _)) = deposit_left(hc, &doc, true).await? {
+            values.extend(more);
+        }
+        hc.kernel.set_values_tx(&system, hc.tx, "Stay", *stay, values).await?;
     }
     let no_shows = missed.len() as i64;
     let available: i64 = sqlx::query_scalar("select count(*) from e_room where tenant_id = $1 and property = $2 and housekeeping <> 'Out of Order'")
@@ -124,6 +131,12 @@ async fn run(hc: &mut HookCtx<'_>, doc: &Doc) -> Result<Value> {
         .await?;
     let next = night + Duration::days(1);
     hc.kernel.set_values_tx(&system, hc.tx, "HotelProperty", property, obj(json!({"business_date": next.to_string()}))).await?;
+    // Tomorrow's housekeeping: each room a guest stays on in is serviced.
+    for (_, _, _, _, _, room, departure) in &in_house {
+        if let Some(room) = room.filter(|_| *departure > next) {
+            task(hc, property, room, next, "Stayover").await?;
+        }
+    }
     let message = format!(
         "The night of {night} is closed: {occupied} of {available} rooms occupied, {posted} room charge{} posted, {no_shows} no-show{}; the business date is {next}",
         if posted == 1 { "" } else { "s" },

@@ -4,13 +4,15 @@
 //! twice; check-in only into a ready room and on the arrival day; a folio with a minibar charge and
 //! a payment; night audits that charge each night once at its season's rate, make a no-show of a
 //! reservation that did not come and keep the night's figures; check-out with the folio invoiced
-//! through ERP; cancellation; and who may do what.
+//! through ERP; cancellation; housekeeping that cleans and inspects rooms; outlets' charges put on a
+//! guest's room; deposits given back or kept by the rate plan's policy, and a no-show's kept; the
+//! public booking page; and who may do what.
 
 use ferrum_kernel::secret::SecretKey;
 use ferrum_kernel::tenant::NewTenant;
-use ferrum_kernel::{Ctx, Db, DbConfig, Doc, Error, HookRegistry, Kernel, KernelSettings, ListQuery};
+use ferrum_kernel::{Ctx, Db, DbConfig, Doc, Error, HookRegistry, Kernel, KernelSettings, ListQuery, Site, SiteRequest};
 use ferrum_meta::Catalog;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -45,6 +47,10 @@ impl T {
     async fn act(&self, ctx: &Ctx, entity: &str, id: Uuid, name: &str, params: Value) -> Result<Value, Error> {
         self.k.run_action(ctx, entity, id, name, params).await
     }
+    async fn find(&self, entity: &str, filters: Value) -> Vec<Doc> {
+        let q = ListQuery { filters: ferrum_kernel::query::parse_filters(&filters).unwrap(), limit: Some(50), ..Default::default() };
+        self.k.list(&self.admin, entity, &q).await.unwrap().rows
+    }
     async fn find_one(&self, entity: &str, filters: Value) -> Doc {
         let q = ListQuery { filters: ferrum_kernel::query::parse_filters(&filters).unwrap(), limit: Some(10), ..Default::default() };
         let rows = self.k.list(&self.admin, entity, &q).await.unwrap().rows;
@@ -57,6 +63,25 @@ impl T {
         let s = self.k.login("harbor", email, "Correct-Horse-9").await.expect("login");
         self.k.load_ctx(self.tenant, id, Some(s.token_version), "it".into()).await.expect("ctx")
     }
+}
+
+/// A guest's request to the booking page, from an address of its own: (status, body).
+async fn site(k: &Kernel, page: &Arc<dyn Site>, tenant: Uuid, method: &str, path: &str, body: Option<Value>) -> Result<(u16, Value), Error> {
+    let (path, query) = path.split_once('?').unwrap_or((path, ""));
+    let query: Map<String, Value> = query.split('&').filter_map(|p| p.split_once('=')).map(|(k, v)| (k.to_string(), json!(v))).collect();
+    let req = SiteRequest {
+        tenant,
+        user: None,
+        method: method.into(),
+        path: path.into(),
+        query,
+        headers: Map::new(),
+        body: body.map(|b| b.to_string().into_bytes()).unwrap_or_default(),
+        client_ip: "10.1.2.3".into(),
+    };
+    let r = page.handle(k, req).await?;
+    assert!(r.headers.iter().any(|(k, v)| k == "cache-control" && v == "no-store"));
+    Ok((r.status, serde_json::from_slice(&r.body).expect("json")))
 }
 
 /// A refusal of the expected kind, saying `says`.
@@ -88,6 +113,7 @@ async fn scenario() {
     ferrum_domain::register(&mut hooks);
     ferrum_app_erp::register(&mut hooks);
     ferrum_app_hospitality::register(&mut hooks);
+    let page = hooks.site("hospitality").cloned().expect("the booking page");
     let settings = KernelSettings { secret_key: Some(SecretKey::new([7u8; 32])), ..Default::default() };
     let k = Kernel::boot(db, catalog, hooks, settings, None).await.expect("boot");
     ferrum_domain::maintenance(&k).await.expect("partitions");
@@ -365,4 +391,185 @@ async fn scenario() {
     // Out of order, a room is not sold.
     t.k.update(&manager, "Room", r102, obj(json!({"housekeeping": "Out of Order"})), None).await.unwrap();
     refused(t.k.update(&desk, "Stay", uid(&two), obj(json!({"departure": "2026-12-05"})), None).await, "invalid", "all 1 are taken");
+
+    // ───────────── housekeeping ─────────────
+    // The audits put Ana's and Dee's rooms down for their service; their check-outs, for cleaning.
+    let task = |room: Uuid, kind: &str| {
+        let t = &t;
+        let kind = kind.to_string();
+        async move { t.find_one("HousekeepingTask", json!({"room": room.to_string(), "kind": kind})).await }
+    };
+    assert_eq!(task(r101, "Stayover").await["task_date"], d1, "Ana stayed on after the first night");
+    assert_eq!(task(r201, "Stayover").await["task_date"], d2, "Dee stayed on after the second");
+    let ana_room = task(r101, "Departure").await;
+    assert_eq!((ana_room["task_date"].as_str(), ana_room["status"].as_str(), ana_room["room_number"].as_str()), (Some(d2), Some("To Do"), Some("101")));
+    let ana_room = uid(&ana_room);
+    let dee_room = uid(&task(r201, "Departure").await);
+    let supervisor = t.user("supervisor@harbor.test", &["Housekeeping Supervisor"]).await;
+    refused(t.act(&supervisor, "HousekeepingTask", ana_room, "inspect", Value::Null).await, "invalid", "not available");
+    let cleaned = t.act(&keeper, "HousekeepingTask", ana_room, "cleaned", Value::Null).await.expect("cleaned");
+    assert_eq!(cleaned["message"], "Room 101 is clean");
+    assert_eq!(t.get("Room", r101).await["housekeeping"], "Clean");
+    refused(t.act(&keeper, "HousekeepingTask", ana_room, "inspect", Value::Null).await, "forbidden", "a housekeeping supervisor inspects");
+    t.act(&supervisor, "HousekeepingTask", ana_room, "inspect", Value::Null).await.expect("inspected by the supervisor");
+    assert_eq!(t.get("Room", r101).await["housekeeping"], "Inspected");
+    // Whoever cleaned a room does not pass it themselves.
+    t.act(&supervisor, "HousekeepingTask", dee_room, "cleaned", Value::Null).await.expect("the supervisor cleans 201");
+    refused(t.act(&supervisor, "HousekeepingTask", dee_room, "inspect", Value::Null).await, "forbidden", "someone other than whoever cleaned");
+    // A property that inspects its rooms checks guests only into inspected ones.
+    t.k.update(&manager, "HotelProperty", hid, obj(json!({"inspect_rooms": true})), None).await.unwrap();
+    let ivy = uid(&t.insert(&desk, "Stay", stay("Ivy Jain", suite, d2, d3, json!({"room": r201.to_string()}))).await);
+    refused(t.act(&desk, "Stay", ivy, "check_in", Value::Null).await, "invalid", "room 201 is clean but not inspected");
+    let passed = t.act(&manager, "HousekeepingTask", dee_room, "inspect", Value::Null).await.expect("the manager inspects 201");
+    assert_eq!(passed["message"], "Room 201 is inspected: ready for a guest");
+    t.act(&desk, "Stay", ivy, "check_in", Value::Null).await.expect("Ivy into an inspected room");
+    t.k.update(&manager, "HotelProperty", hid, obj(json!({"inspect_rooms": false})), None).await.unwrap();
+
+    // ───────────── an outlet's charge on a guest's room ─────────────
+    let dining = uid(&t.insert(&a, "Item", item("DINING")).await);
+    let cashier = t.user("bar@harbor.test", &["Outlet Cashier"]).await;
+    let charge = |room: Uuid, guest: &str, amount: &str| {
+        json!({"property": hid.to_string(), "room": room.to_string(), "guest_name": guest, "outlet": "Restaurant", "description": "Dinner, bill 14",
+               "amount": amount, "item": dining.to_string(), "reference": "ORD-14"})
+    };
+    let r202 = uid(&t.find_one("Room", json!({"room_number": "202"})).await);
+    refused(t.try_insert(&cashier, "RoomCharge", charge(r202, "Ivy", "900")).await, "invalid", "room 202 has no guest checked in");
+    refused(t.try_insert(&cashier, "RoomCharge", charge(r201, "Ivy Rao", "900")).await, "invalid", "is not the name of the guest in room 201");
+    refused(t.try_insert(&cashier, "RoomCharge", charge(r201, "Ivy", "0")).await, "invalid", "above zero");
+    refused(t.try_insert(&keeper, "RoomCharge", charge(r201, "Ivy", "900")).await, "forbidden", "");
+    let posted = uid(&t.insert(&cashier, "RoomCharge", charge(r201, "jain", "900")).await);
+    let ivy_folio = uid(&obj(json!({"id": t.get("Stay", ivy).await["folio"]})));
+    let f = t.get("Folio", ivy_folio).await;
+    let dinner = f["charges"].as_array().unwrap().iter().find(|c| c["room_charge"] == posted.to_string().as_str()).cloned().expect("on the folio");
+    assert_eq!(
+        (dinner["kind"].as_str(), dinner["description"].as_str(), dec(&dinner["amount"]), dinner["charge_date"].as_str()),
+        (Some("Service"), Some("Restaurant: Dinner, bill 14"), 900.0, Some(d2))
+    );
+    assert_eq!(t.get("RoomCharge", posted).await["folio"].as_str(), Some(ivy_folio.to_string().as_str()));
+    refused(t.k.get(&cashier, "Folio", ivy_folio, false).await, "forbidden", "");
+    refused(t.k.update(&a, "RoomCharge", posted, obj(json!({"amount": "1"})), None).await, "invalid", "does not change");
+
+    // ───────────── deposits ─────────────
+    // Asked by the rate plan: a fifth of the stay, given back up to a week before arrival.
+    let advance = uid(&t
+        .insert(&manager, "RatePlan", json!({"rate_plan_name": "Advance", "property": hid.to_string(), "deposit_percent": "20", "refund_days": 7}))
+        .await);
+    let jo = t.insert(&desk, "Stay", stay("Jo Kim", suite, "2026-12-20", "2026-12-22", json!({"rate_plan": advance.to_string()}))).await;
+    assert_eq!((dec(&jo["total"]), dec(&jo["deposit_due"])), (18000.0, 3600.0));
+    let jo = uid(&jo);
+    refused(t.act(&keeper, "Stay", jo, "take_deposit", json!({"mode": "Card"})).await, "forbidden", "");
+    let took = t.act(&desk, "Stay", jo, "take_deposit", json!({"mode": "Card", "reference": "AUTH-9"})).await.expect("a deposit");
+    assert_eq!(took["message"], "Took a deposit of 3600.00: 3600.00 of the 3600.00 due is paid");
+    let pe = t.get("PaymentEntry", uid(&obj(json!({"id": took["payment_entry"]["id"]})))).await;
+    assert_eq!(
+        (pe["docstatus"].as_i64(), dec(&pe["paid_amount"]), dec(&pe["unallocated_amount"]), pe["customer"].as_str()),
+        (Some(1), 3600.0, 3600.0, Some(walk_in.to_string().as_str())),
+        "in the books at once, the payer's advance"
+    );
+    refused(t.act(&desk, "Stay", jo, "take_deposit", json!({"mode": "Card"})).await, "invalid", "nothing is due");
+    // Cancelled more than a week ahead: given back, by a draft for accounts.
+    let gone = t.act(&desk, "Stay", jo, "cancel_stay", json!({"reason": "travel cancelled"})).await.expect("cancelled early");
+    assert!(gone["message"].as_str().unwrap().ends_with("its deposit of 3600.00 is to be given back (a draft journal entry for accounts)"), "{gone}");
+    let jo_now = t.get("Stay", jo).await;
+    assert_eq!(jo_now["deposit_outcome"], "Refund Due");
+    let je = t.get("JournalEntry", uid(&obj(json!({"id": jo_now["deposit_refund"]})))).await;
+    let lines: Vec<(f64, f64, Option<&str>)> =
+        je["accounts"].as_array().unwrap().iter().map(|l| (dec(&l["debit"]), dec(&l["credit"]), l["customer"].as_str())).collect();
+    let walk_in_id = walk_in.to_string();
+    assert_eq!((je["docstatus"].as_i64(), lines), (Some(0), vec![(3600.0, 0.0, Some(walk_in_id.as_str())), (0.0, 3600.0, None)]));
+    // Cancelled three days ahead: the hotel keeps it, invoiced as a cancellation fee.
+    let kai = uid(&t.insert(&desk, "Stay", stay("Kai Lo", suite, "2026-12-06", "2026-12-07", json!({"rate_plan": advance.to_string()}))).await);
+    t.act(&desk, "Stay", kai, "take_deposit", json!({"mode": "Cash"})).await.expect("Kai's deposit");
+    let late = t.act(&desk, "Stay", kai, "cancel_stay", json!({"reason": "changed hotel"})).await.expect("cancelled late");
+    assert!(late["message"].as_str().unwrap().ends_with("its deposit of 1800.00 is kept, invoiced as a cancellation fee (a draft)"), "{late}");
+    let kai_now = t.get("Stay", kai).await;
+    let fee = t.get("SalesInvoice", uid(&obj(json!({"id": kai_now["deposit_invoice"]})))).await;
+    assert_eq!(
+        (kai_now["deposit_outcome"].as_str(), fee["items"][0]["item"].as_str(), dec(&fee["items"][0]["price_list_rate"])),
+        (Some("Kept"), Some(room_night.to_string().as_str()), 1800.0)
+    );
+    // A no-show's deposit is kept too, at the night audit, even where a cancellation would have had it
+    // back any time.
+    let flexible = uid(&t.insert(&manager, "RatePlan", json!({"rate_plan_name": "Flexible", "property": hid.to_string(), "deposit_percent": "10"})).await);
+    let lee = uid(&t.insert(&desk, "Stay", stay("Lee Moe", suite, d2, d3, json!({"rate_plan": flexible.to_string()}))).await);
+    t.act(&desk, "Stay", lee, "take_deposit", json!({"mode": "Card", "amount": "500"})).await.expect("part of Lee's deposit");
+    t.act(&manager, "HotelProperty", hid, "night_audit", Value::Null).await.expect("the night of 3 December");
+    let lee_now = t.get("Stay", lee).await;
+    assert_eq!((lee_now["status"].as_str(), lee_now["deposit_outcome"].as_str()), (Some("No Show"), Some("Kept")));
+    assert!(lee_now["deposit_invoice"].is_string(), "{lee_now:?}");
+    // Ivy leaves: the dinner is invoiced with her room.
+    let out = t.act(&desk, "Stay", ivy, "check_out", Value::Null).await.expect("Ivy checks out");
+    let inv = t.get("SalesInvoice", uid(&obj(json!({"id": out["sales_invoice"]["id"]})))).await;
+    let mut billed: Vec<(String, f64)> =
+        inv["items"].as_array().unwrap().iter().map(|l| (l["item"].as_str().unwrap().to_string(), dec(&l["price_list_rate"]))).collect();
+    billed.sort_by(|x, y| x.0.cmp(&y.0));
+    let mut want = vec![(dining.to_string(), 900.0), (room_night.to_string(), 9000.0)];
+    want.sort_by(|x, y| x.0.cmp(&y.0));
+    assert_eq!(billed, want, "the outlet's charge and her night");
+    // A deposit goes on the folio at check-in, already in the books.
+    let d4 = "2026-12-04";
+    let mia = uid(&t.insert(&desk, "Stay", stay("Mia Noor", suite, d4, "2026-12-05", json!({"rate_plan": advance.to_string()}))).await);
+    let mia_pe = t.act(&desk, "Stay", mia, "take_deposit", json!({"mode": "Card"})).await.expect("Mia's deposit")["payment_entry"]["id"].clone();
+    t.act(&desk, "Stay", mia, "check_in", json!({"room": r202.to_string()})).await.expect("Mia checks in");
+    let mia_folio = t.get("Folio", uid(&obj(json!({"id": t.get("Stay", mia).await["folio"]})))).await;
+    assert_eq!((dec(&mia_folio["total_payments"]), &mia_folio["payments"][0]["payment_entry"]), (1800.0, &mia_pe));
+    let left = t.act(&desk, "Stay", mia, "check_out", Value::Null).await.expect("Mia leaves");
+    assert!(left["message"].as_str().unwrap().ends_with("the deposit of 1800.00 is the guest's advance in ERP, to apply to it"), "{left}");
+
+    // ───────────── the booking page ─────────────
+    let call = |method: &'static str, path: String, body: Option<Value>| {
+        let (k, page) = (&t.k, &page);
+        async move { site(k, page, tenant, method, &path, body).await }
+    };
+    refused(call("GET", "/properties".into(), None).await, "not found", "");
+    t.k.update(&manager, "HotelProperty", hid, obj(json!({"book_online": true, "online_rate_plan": advance.to_string()})), None).await.unwrap();
+    let listed = call("GET", "/properties".into(), None).await.unwrap().1;
+    assert_eq!(listed["properties"].as_array().unwrap().iter().map(|p| p["code"].as_str().unwrap()).collect::<Vec<_>>(), ["HH"]);
+    let offers = call("GET", "/availability?property=HH&arrival=2026-12-10&departure=2026-12-12&adults=2".into(), None).await.unwrap().1;
+    let seen: Vec<(String, i64, f64, f64)> = offers["offers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| (o["name"].as_str().unwrap().to_string(), o["free"].as_i64().unwrap(), dec(&o["total"]), dec(&o["deposit"])))
+        .collect();
+    assert_eq!(seen, [("Deluxe".to_string(), 1, 8000.0, 1600.0), ("Suite".to_string(), 2, 18000.0, 3600.0)], "102 is out of order");
+    let three = call("GET", "/availability?property=HH&arrival=2026-12-10&departure=2026-12-12&adults=3".into(), None).await.unwrap().1;
+    assert_eq!(three["offers"].as_array().unwrap().len(), 1, "a Deluxe sleeps two");
+    refused(call("GET", "/availability?property=HH&arrival=2026-12-01&departure=2026-12-02".into(), None).await, "invalid", "is 2026-12-04 or later");
+    refused(call("GET", "/availability?property=HH&arrival=2026-12-10&departure=2027-01-20".into(), None).await, "invalid", "at most 30 nights");
+    refused(call("GET", "/availability?property=HL&arrival=2026-12-10&departure=2026-12-12".into(), None).await, "not found", "");
+    let booking = |name: &str, email: Option<&str>, ty: Uuid| json!({"property": "HH", "room_type": ty.to_string(), "arrival": "2026-12-10", "departure": "2026-12-12", "adults": 2, "name": name, "email": email});
+    refused(call("POST", "/book".into(), Some(booking("Noa Park", None, suite))).await, "invalid", "email");
+    let bot = call("POST", "/book".into(), Some(json!({"website": "spam", "name": "x"}))).await.unwrap();
+    assert_eq!(bot, (201, json!({"status": "received"})));
+    let (status, booked) = call("POST", "/book".into(), Some(booking("Noa Park", Some("noa@guest.test"), suite))).await.expect("booked online");
+    assert_eq!(status, 201);
+    let r = &booked["reservation"];
+    assert_eq!(
+        (r["status"].as_str(), r["room_type"].as_str(), dec(&r["total"]), dec(&r["deposit_due"]), r["refund_days"].as_i64()),
+        (Some("Reserved"), Some("Suite"), 18000.0, 3600.0, Some(7))
+    );
+    let token = booked["token"].as_str().unwrap().to_string();
+    let noa = t.find_one("Stay", json!({"guest_email": "noa@guest.test"})).await;
+    assert_eq!((noa["source"].as_str(), noa["rate_plan"].as_str()), (Some("Online"), Some(advance.to_string().as_str())));
+    assert!(noa["guest_token_hash"].as_str().is_some_and(|h| h.len() == 64 && h != token), "only the link's hash is kept");
+    // The last Deluxe goes once.
+    call("POST", "/book".into(), Some(booking("Oli Quinn", Some("oli@guest.test"), deluxe))).await.expect("the last Deluxe");
+    refused(
+        call("POST", "/book".into(), Some(booking("Pat Roe", Some("pat@guest.test"), deluxe))).await,
+        "invalid",
+        "no Deluxe room is free on the night of 2026-12-10",
+    );
+    let left = call("GET", "/availability?property=HH&arrival=2026-12-10&departure=2026-12-12&adults=2".into(), None).await.unwrap().1;
+    assert_eq!(left["offers"].as_array().unwrap().iter().map(|o| o["name"].as_str().unwrap()).collect::<Vec<_>>(), ["Suite"], "the Deluxe is sold");
+    // The guest's own link.
+    let mine = call("GET", format!("/manage/{token}"), None).await.unwrap().1;
+    assert_eq!((mine["reservation"]["number"].clone(), mine["reservation"]["cancellable"].as_bool()), (noa["number"].clone(), Some(true)));
+    refused(call("GET", "/manage/not-a-link".into(), None).await, "not found", "");
+    refused(call("GET", format!("/manage/{}", "A".repeat(43)), None).await, "not found", "");
+    let undone = call("POST", format!("/manage/{token}/cancel"), Some(json!({"reason": "found another date"}))).await.unwrap().1;
+    assert_eq!((undone["reservation"]["status"].as_str(), undone["reservation"]["cancellable"].as_bool()), (Some("Cancelled"), Some(false)));
+    assert_eq!(t.find_one("Stay", json!({"guest_email": "noa@guest.test"})).await["cancellation_reason"], "found another date");
+    refused(call("POST", format!("/manage/{token}/cancel"), Some(json!({}))).await, "invalid", "it is not cancelled online");
+    assert!(t.find("Stay", json!({"guest_name": "x"})).await.is_empty(), "nothing booked for the program");
 }
