@@ -2,16 +2,24 @@
 //! rate plans, stays from reservation to check-out, folios and the night audit.
 //!
 //! * `stay`: reservations held night by night against their room and their room type (no room
-//!   is sold twice, no type past its rooms), check-in into a clean room, check-out with the
-//!   folio's invoice, cancellation; the per-night price.
+//!   is sold twice, no type past its rooms), deposits by the rate plan's policy, check-in into a
+//!   ready room, check-out with the folio's invoice, cancellation; the per-night price.
 //! * `folio`: a stay's charges and payments, its totals, and room nights only the audit posts.
 //! * `audit`: the night audit, which closes a business date: each stay in the house is charged
-//!   its night, reservations that did not arrive become no-shows, and the day's figures are kept.
+//!   its night, reservations that did not arrive become no-shows (their deposits kept), the day's
+//!   figures are kept, and the next day's stayover rooms are put down for housekeeping.
+//! * `housekeeping`: rooms to clean, cleaned, then inspected by a supervisor other than the cleaner.
+//! * `charges`: what a guest had at an outlet, put on their room's folio, checked against the guest.
+//! * `site`: the public booking page's endpoints: availability, booking, and a guest's own link to
+//!   their reservation (its pages are the interface's, `ui/`).
 //!
 //! Hooks are registered per entity, so a workspace without the `hospitality` package never runs them.
 
 mod audit;
+mod charges;
 mod folio;
+mod housekeeping;
+mod site;
 mod stay;
 
 use chrono::NaiveDate;
@@ -38,7 +46,10 @@ pub fn register(hooks: &mut HookRegistry) {
         .register("Stay", Arc::new(stay::StayHook))
         .register("Room", Arc::new(stay::RoomHook))
         .register("Folio", Arc::new(folio::FolioHook))
-        .register("HotelProperty", Arc::new(audit::PropertyHook));
+        .register("HotelProperty", Arc::new(audit::PropertyHook))
+        .register("HousekeepingTask", Arc::new(housekeeping::TaskHook))
+        .register("RoomCharge", Arc::new(charges::RoomChargeHook))
+        .add_site("hospitality", Arc::new(site::HotelSite));
 }
 
 /// This app's reports: none of its own, as the night audits are its figures (occupancy, ADR, RevPAR).

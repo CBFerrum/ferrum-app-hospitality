@@ -1,8 +1,8 @@
 id: hospitality
 name: Hospitality
-version: 0.2.11
+version: 0.3.0
 publisher: cbferrum
-summary: "A hotel's front office: rooms, rate plans, stays from reservation to check-out, folios and the night audit"
+summary: "A hotel's front office: rooms, rate plans, a booking page, deposits, stays from reservation to check-out, folios with outlets' charges, housekeeping and the night audit"
 description: README.md
 categories: [sales, industry]
 license: AGPL-3.0-only
@@ -26,11 +26,14 @@ contributes:
       description: The front desk, rooms, stays and the night audit
       icon: bed-double
       color: "#9a3412"
-      roles: [Hotel Manager, Front Desk, Housekeeping]
+      roles: [Hotel Manager, Front Desk, Housekeeping, Housekeeping Supervisor, Outlet Cashier]
   shell.open:
     - {id: hospitality, package: hospitality, path: "hotel/e/{entity}/{id}", list: "hotel/e/{entity}"}
   shell.create:
     - {id: stay, label: Stay, path: hotel/e/Stay/new, entity: Stay}
+  # What guests open without signing in: /hotel/book/{workspace}, and their own reservation below it.
+  shell.public:
+    - {id: book, path: hotel/book, title: Book a room}
   # What the assistant should know in Hospitality's pages, and what it suggests asking there.
   shell.assistant:
     - id: hospitality

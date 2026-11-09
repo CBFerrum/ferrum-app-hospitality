@@ -12,6 +12,10 @@
     - {name: room_item, type: link, to: Item, required: true, label: Room Night Item, description: "What a night's room charge is invoiced as"}
     - {name: walk_in_customer, type: link, to: Customer, label: Walk-in Customer, description: "Invoices of guests without a customer of their own go to it"}
     - {name: takings_account, type: link, to: Account, link_filters: {is_group: false}, label: Takings Account, description: "Where payments taken at the front desk are received in ERP; the company's default cash account when empty"}
+    - {name: book_online, type: check, label: Booked Online, description: "Guests book it themselves on its booking page"}
+    - {name: online_rate_plan, type: link, to: RatePlan, label: Online Rate Plan, description: "What its booking page sells at, and the deposit it asks; the room types' base rates when empty"}
+    - {name: inspect_rooms, type: check, label: Rooms Inspected Before Check-in, description: "A guest goes only into a room a supervisor inspected after it was cleaned"}
+    - {name: cancellation_item, type: link, to: Item, label: Cancellation Fee Item, description: "What a deposit kept for a late cancellation or a no-show is invoiced as; the room night item when empty"}
     - {name: check_in_time, type: data, default: "14:00", max_length: 5}
     - {name: check_out_time, type: data, default: "11:00", max_length: 5}
     - {name: business_date, type: date, read_only: true, no_copy: true, in_list: true, description: "The night the front office is in. Set it once when the hotel starts; the night audit moves it on"}
@@ -26,8 +30,9 @@
         - {name: date, type: date, label: First Business Date, required: true, description: "The night the front office starts in; the night audit moves it on from there"}
   form:
     - {label: Property, fields: [property_name, code, company, address]}
-    - {label: Front Office, fields: [business_date, check_in_time, check_out_time]}
-    - {label: Invoicing, fields: [room_item, walk_in_customer, takings_account]}
+    - {label: Front Office, fields: [business_date, check_in_time, check_out_time, inspect_rooms]}
+    - {label: Booking Page, fields: [book_online, online_rate_plan]}
+    - {label: Invoicing, fields: [room_item, walk_in_customer, takings_account, cancellation_item]}
   list: {columns: [property_name, code, business_date], sort: property_name asc}
 
 - name: RoomType
@@ -85,10 +90,12 @@
     - {name: property, type: link, to: HotelProperty, required: true, in_list: true, in_filter: true}
     - {name: active, type: check, default: true, in_list: true}
     - {name: breakfast_included, type: check}
+    - {name: deposit_percent, type: percent, min: "0", max: "100", label: Deposit %, description: "Of a stay's total, asked when it is booked"}
+    - {name: refund_days, type: int, min: 0, label: Refundable Until, description: "Days before arrival a cancellation still gets its deposit back; later, and for a no-show, the hotel keeps it"}
     - {name: cancellation_policy, type: text}
     - {name: seasons, type: table, of: RateSeason}
   form:
-    - {label: Rate Plan, fields: [rate_plan_name, property, active, breakfast_included, cancellation_policy]}
+    - {label: Rate Plan, fields: [rate_plan_name, property, active, breakfast_included, deposit_percent, refund_days, cancellation_policy]}
     - {label: Seasons, fields: [seasons]}
   list: {columns: [rate_plan_name, property, active], sort: rate_plan_name asc}
 
@@ -124,6 +131,14 @@
     - {name: room, type: link, to: Room, in_list: true}
     - {name: rate_plan, type: link, to: RatePlan}
     - {name: total, type: currency, read_only: true, description: "The nights at their rates, as priced when booked"}
+    - {name: source, type: select, options: [Front Desk, Online], default: Front Desk, read_only: true, in_list: true, in_filter: true}
+    - {name: deposit_due, type: currency, read_only: true, description: "The rate plan's deposit on the stay's total"}
+    - {name: deposit_paid, type: currency, read_only: true}
+    - {name: deposits, type: table, of: StayDeposit, read_only: true, description: "Deposits taken before the stay, each a payment in ERP"}
+    - {name: deposit_outcome, type: select, options: [Refund Due, Kept], read_only: true, no_copy: true, description: "What became of its deposit when it did not come: given back, or kept by the policy"}
+    - {name: deposit_refund, type: link, to: JournalEntry, read_only: true, no_copy: true, description: "The draft journal entry giving the deposit back, for accounts to submit when it is paid out"}
+    - {name: deposit_invoice, type: link, to: SalesInvoice, read_only: true, no_copy: true, label: Deposit Kept As, description: "The draft invoice for the deposit kept, for accounts to apply the deposit to"}
+    - {name: guest_token_hash, type: data, read_only: true, hidden: true, no_copy: true, no_export: true}
     - {name: status, type: select, options: [Reserved, Checked In, Checked Out, Cancelled, No Show], default: Reserved, read_only: true, no_copy: true, in_list: true, in_filter: true}
     - {name: checked_in_at, type: datetime, read_only: true, no_copy: true}
     - {name: checked_out_at, type: datetime, read_only: true, no_copy: true}
@@ -145,14 +160,33 @@
       condition: "doc.status == 'Reserved'"
       params:
         - {name: reason, type: text, label: Reason, required: true}
+    - name: take_deposit
+      label: Take a Deposit
+      permission: write
+      condition: "doc.status == 'Reserved'"
+      params:
+        - {name: amount, label: Amount, description: "What is still due when empty"}
+        - {name: mode, label: Paid By, type: select, options: [Cash, Card, Bank Transfer], required: true}
+        - {name: reference, label: Reference, description: "The card slip, transfer or receipt"}
   form:
     - {label: Guest, fields: [property, guest_name, guest_email, guest_phone, customer]}
     - {label: Stay, fields: [arrival, departure, nights, adults, children]}
-    - {label: Room, fields: [room_type, room, rate_plan, total]}
+    - {label: Room, fields: [room_type, room, rate_plan, total, source]}
+    - {label: Deposit, fields: [deposit_due, deposit_paid, deposits, deposit_outcome, deposit_refund, deposit_invoice]}
     - {label: Status, fields: [status, checked_in_at, checked_out_at, folio, sales_invoice, cancellation_reason]}
     - {label: Notes, collapsible: true, fields: [notes]}
   numbering: {template: "STAY-{YYYY}-{seq:5}"}
   list: {columns: [number, guest_name, arrival, departure, room_type, room, status], sort: arrival desc}
+
+- name: StayDeposit
+  label: Deposit
+  kind: child
+  fields:
+    - {name: paid_on, type: date, in_list: true}
+    - {name: amount, type: currency, in_list: true}
+    - {name: mode, type: data, in_list: true}
+    - {name: reference, type: data, in_list: true}
+    - {name: payment_entry, type: link, to: PaymentEntry, in_list: true}
 
 - name: Folio
   label: Folio
@@ -188,6 +222,7 @@
     - {name: kind, type: select, options: [Room, Service, Adjustment], default: Service, required: true, in_list: true}
     - {name: description, type: data, required: true, in_list: true}
     - {name: item, type: link, to: Item, in_list: true, description: "What it is invoiced as; a room night is the property's room item"}
+    - {name: room_charge, type: link, to: RoomCharge, read_only: true, description: "The outlet's charge it was posted from"}
     - {name: qty, type: decimal, default: 1, in_list: true}
     - {name: rate, type: currency, required: true, in_list: true}
     - {name: amount, type: currency, read_only: true, in_list: true}
@@ -226,3 +261,46 @@
     - {label: Rooms, fields: [rooms_available, rooms_occupied, occupancy_percent, no_shows, charges_posted]}
     - {label: Revenue, fields: [room_revenue, average_daily_rate, revpar]}
   list: {columns: [business_date, property, occupancy_percent, room_revenue, average_daily_rate, revpar], sort: business_date desc}
+
+- name: HousekeepingTask
+  label: Housekeeping Task
+  label_plural: Housekeeping Tasks
+  kind: master
+  module: hospitality
+  title_field: room_number
+  description: A room to clean on a business date. Check-out leaves one for the room it frees; the night audit one for each room a guest stays on in. Cleaned, the room is Clean; inspected by someone other than whoever cleaned it, Inspected.
+  fields:
+    - {name: property, type: link, to: HotelProperty, required: true, read_only: true, in_list: true, in_filter: true}
+    - {name: room, type: link, to: Room, required: true, read_only: true, in_filter: true}
+    - {name: room_number, type: data, read_only: true, in_list: true}
+    - {name: task_date, type: date, required: true, read_only: true, in_list: true, in_filter: true}
+    - {name: kind, type: select, options: [Departure, Stayover], required: true, read_only: true, in_list: true, in_filter: true, description: "Departure: a room a guest left, cleaned for the next; Stayover: a guest's room serviced while they stay"}
+    - {name: status, type: select, options: [To Do, Cleaned, Inspected], default: To Do, read_only: true, no_copy: true, in_list: true, in_filter: true}
+    - {name: assigned_to, type: data, in_list: true, description: "Who is to clean it"}
+    - {name: cleaned_by, type: data, read_only: true, no_copy: true}
+    - {name: inspected_by, type: data, read_only: true, no_copy: true}
+    - {name: notes, type: text}
+  actions:
+    - {name: cleaned, label: Cleaned, permission: write, condition: "doc.status == 'To Do'"}
+    - {name: inspect, label: Inspected, permission: write, condition: "doc.status == 'Cleaned' && doc.kind == 'Departure'"}
+  list: {columns: [task_date, room_number, kind, status, assigned_to], sort: task_date desc}
+
+- name: RoomCharge
+  label: Room Charge
+  label_plural: Room Charges
+  kind: master
+  module: hospitality
+  title_field: description
+  description: What a guest had at an outlet (the restaurant, the spa) put on their room. It is posted to the folio of the stay in that room, checked against the guest's name, and invoiced with the room at check-out.
+  fields:
+    - {name: property, type: link, to: HotelProperty, required: true, in_list: true, in_filter: true}
+    - {name: room, type: link, to: Room, required: true, in_list: true}
+    - {name: guest_name, type: data, required: true, description: "The guest's name as they gave it, checked against the stay in the room"}
+    - {name: outlet, type: data, required: true, in_list: true, description: "Where it was had: Restaurant, Spa, Minibar"}
+    - {name: description, type: data, required: true, in_list: true}
+    - {name: amount, type: currency, required: true, in_list: true}
+    - {name: item, type: link, to: Item, required: true, description: "What the hotel invoices it as"}
+    - {name: reference, type: data, description: "The outlet's own bill or order"}
+    - {name: stay, type: link, to: Stay, read_only: true, no_copy: true}
+    - {name: folio, type: link, to: Folio, read_only: true, no_copy: true}
+  list: {columns: [created_at, room, outlet, description, amount], sort: created_at desc}

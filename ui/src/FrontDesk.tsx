@@ -116,7 +116,9 @@ function Desk({ property }: { property: Property }) {
       <header className="row" style={{ justifyContent: "space-between" }}>
         <div>
           <h2>{isolate(property.property_name)}</h2>
-          <div className="faint">{t("Business date {bd}", { bd })}</div>
+          <div className="faint">
+            {t("Business date {bd}", { bd })} · <Link to="/housekeeping">{t("Housekeeping")}</Link>
+          </div>
         </div>
         <Button
           loading={audit.isPending || opening}
