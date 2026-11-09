@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+The hotel's operating cycle (FEO-045).
+
+- **Deposits.** A rate plan asks a share of the stay (Deposit %) and says how many days before arrival a cancellation still gets it back (Refundable Until). Take a Deposit records it as a submitted payment entry, the payer's advance; it goes on the folio at check-in. Cancelled in time, a draft journal entry gives it back; cancelled late, or a no-show at the night audit, a draft cancellation-fee invoice keeps it (the property's Cancellation Fee Item, else its room night item).
+- **Housekeeping.** Housekeeping Task: a departure for each room a check-out or a move frees, a stayover for each room a guest stays on in after the night audit. Cleaned, the room is Clean; inspected by a Housekeeping Supervisor or the Hotel Manager who did not clean it, Inspected. A property may check guests only into inspected rooms. The Housekeeping page lists what is to do.
+- **Room charges.** An Outlet Cashier puts what a guest had at an outlet on their room: checked against the guest in it and their open folio, posted to the folio with the outlet's item, invoiced with the room. A posted charge does not change.
+- **The booking page** (/hotel/book/{workspace}, public): availability by room type at the online rate plan with the deposit asked, booking with a name and email, and the guest's own link (only its SHA-256 kept on the stay; emailed where the server sends mail) to see or cancel the reservation by the same policy. Writes are limited per address.
+- New roles Housekeeping Supervisor and Outlet Cashier; the front desk and the manager may create payment entries (deposits). Names in Arabic and Hindi for the new fields, and Open, Folio and Properties corrected.
+
 ## 0.2.11
 
 Rebuilt with Ferrum-Frontend c59c9a2: the names of its models, fields and manifest in Arabic and Hindi (149 each in ui/src/locales/names, which the platform serves to every page of the workspace, so a record's labels, the launcher and the bar read in the person's language). Translated by the model, to be reviewed by native speakers.
