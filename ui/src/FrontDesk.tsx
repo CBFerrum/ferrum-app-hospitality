@@ -3,10 +3,9 @@
 // everything else opens in the records frame.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { Link } from "react-router";
-import { api, docPath, refusal, t, isolate } from "@ferrum/client";
-import { Badge, Button, confirmDialog, EmptyState, ErrorState, PageLoading, toast, useShellTitle } from "@ferrum/kit";
+import { useState, type ReactNode } from "react";
+import { api, docPath, formatValue, refusal, t, isolate } from "@ferrum/client";
+import { Button, ButtonLink, confirmDialog, HomeSection, HomeSkeleton, LoadFailed, PageHead, Queue, QueueGrid, QueueItem, StatePanel, StatusBadge, Tile, TileGrid, toast, type Tone } from "@ferrum/kit";
 
 interface Property {
   id: string;
@@ -37,40 +36,43 @@ const rows = <T,>(entity: string, filters: unknown[], extra: Record<string, stri
 
 const act = (entity: string, id: string, action: string, params: unknown = {}) => api.post<Record<string, unknown>>(docPath(entity, id, "actions", action), params);
 
-const TONE: Record<string, "green" | "amber" | "red" | "neutral"> = { Clean: "green", Inspected: "green", Dirty: "amber", "Out of Order": "red" };
+/** Room.housekeeping as stored (packages/hospitality/entities), for `statusTone`: four states, four tones, and the word
+ *  is always shown beside it. */
+export const ROOM_TONES: Readonly<Record<string, Tone>> = { Clean: "blue", Inspected: "green", Dirty: "amber", "Out of Order": "red" };
 
-function List({ title, stays, action, onAct }: { title: string; stays: Stay[]; action?: { label: string; name: string }; onAct: (s: Stay, name: string) => void }) {
+/** A day as the person reads it ("11 Nov 2026"). */
+const dayText = (v: string) => formatValue({ type: "date" }, v);
+
+/** A stay's day in a row, without its year ("14 Nov"): the desk works within days of the business date, and a row is narrow. */
+export const shortDay = (v: string): string => new Intl.DateTimeFormat(typeof document === "undefined" ? "en" : document.documentElement.lang || undefined, { day: "numeric", month: "short" }).format(new Date(`${v}T00:00:00`));
+
+/** The number of the room a stay holds (its `room` is the room's id); empty until one is given. */
+export const roomNumber = (stay: Pick<Stay, "room">, rooms: Pick<Room, "id" | "room_number">[]): string => rooms.find((r) => r.id === stay.room)?.room_number ?? "";
+
+function List({ title, stays, rooms, action, busy, onAct }: { title: string; stays: Stay[]; rooms: Room[]; action?: { label: string; name: string }; busy: string | null; onAct: (s: Stay, name: string) => void }) {
   return (
-    <section className="card card-pad stack" aria-label={title}>
-      <h3>
-        {isolate(title)} <span className="faint">({stays.length})</span>
-      </h3>
-      {stays.length === 0 ? (
-        <p className="muted">{t("Nobody.")}</p>
-      ) : (
-        <ul className="stack">
-          {stays.map((s) => (
-            <li key={s.id} className="row" style={{ justifyContent: "space-between", gap: 8 }}>
-              <span>
-                <Link to={`/e/Stay/${s.id}`}>{isolate(s.guest_name)}</Link> <span className="faint">{isolate(s.number)}</span>
-                <div className="faint">
-                  {t("{arrival} to {departure}", { arrival: s.arrival, departure: s.departure })}
-                </div>
-              </span>
-              {action && (
-                <Button size="sm" onClick={() => onAct(s, action.name)}>
-                  {isolate(action.label)}
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <Queue title={title} count={stays.length} empty={t("Nobody.")}>
+      {stays.map((s) => (
+        <QueueItem
+          key={s.id}
+          to={`/e/Stay/${s.id}`}
+          lead={isolate(roomNumber(s, rooms)) || "—"}
+          title={isolate(s.guest_name)}
+          meta={`${isolate(s.number)} · ${t("{arrival} to {departure}", { arrival: shortDay(s.arrival), departure: shortDay(s.departure) })}`}
+          action={
+            action ? (
+              <Button size="sm" loading={busy === s.id} onClick={() => onAct(s, action.name)}>
+                {isolate(action.label)}
+              </Button>
+            ) : undefined
+          }
+        />
+      ))}
+    </Queue>
   );
 }
 
-function Desk({ property }: { property: Property }) {
+function Desk({ property, picker }: { property: Property; picker: ReactNode }) {
   const qc = useQueryClient();
   const bd = property.business_date;
   const stays = useQuery({
@@ -97,95 +99,131 @@ function Desk({ property }: { property: Property }) {
     onError: (e) => toast(refusal(e), "error"),
   });
   const [opening, setOpening] = useState(false);
+  const nameLine = isolate(property.property_name);
   if (!bd)
     return (
-      <EmptyState title={t("The hotel has no business date yet")}>
-        <p className="muted">{t("Set the first one on the property, with Set the Business Date.")}</p>
-        <Link to={`/e/HotelProperty/${property.id}`}>{t("Open {property_name}", { property_name: property.property_name })}</Link>
-      </EmptyState>
+      <>
+        <PageHead title={t("Front desk")} description={nameLine} actions={picker} />
+        <StatePanel
+          kind="empty"
+          title={t("The hotel has no business date yet")}
+          action={
+            <ButtonLink to={`/e/HotelProperty/${property.id}`} variant="primary">
+              {t("Open {property_name}", { property_name: property.property_name })}
+            </ButtonLink>
+          }
+        >
+          {t("Set the first one on the property, with Set the Business Date.")}
+        </StatePanel>
+      </>
     );
-  if (stays.isPending || rooms.isPending) return <PageLoading />;
-  if (stays.isError) return <ErrorState error={stays.error} onRetry={() => void stays.refetch()} />;
-  if (rooms.isError) return <ErrorState error={rooms.error} onRetry={() => void rooms.refetch()} />;
+  if (stays.isPending || rooms.isPending)
+    return (
+      <>
+        <PageHead title={t("Front desk")} description={nameLine} actions={picker} />
+        <HomeSkeleton />
+      </>
+    );
+  if (stays.isError || rooms.isError)
+    return (
+      <>
+        <PageHead title={t("Front desk")} description={nameLine} actions={picker} />
+        <LoadFailed error={stays.error ?? rooms.error} onRetry={() => void (stays.isError ? stays : rooms).refetch()} />
+      </>
+    );
   const arriving = stays.data.filter((s) => s.status === "Reserved" && s.arrival <= bd);
   const inHouse = stays.data.filter((s) => s.status === "Checked In");
   const leaving = inHouse.filter((s) => s.departure <= bd);
   const onAct = (stay: Stay, name: string) => move.mutate({ stay, name });
+  const busy = move.isPending ? move.variables.stay.id : null;
   return (
     <>
-      <header className="row" style={{ justifyContent: "space-between" }}>
-        <div>
-          <h2>{isolate(property.property_name)}</h2>
-          <div className="faint">
-            {t("Business date {bd}", { bd })} · <Link to="/housekeeping">{t("Housekeeping")}</Link>
-          </div>
-        </div>
-        <Button
-          loading={audit.isPending || opening}
-          onClick={async () => {
-            setOpening(true);
-            const ok = await confirmDialog({
-              title: t("Close the night of {bd}?", { bd }),
-              message: t("Room charges are posted to every stay in the house, reservations that did not arrive become no-shows, and the next day opens."),
-              confirmLabel: t("Run the night audit"),
-            });
-            setOpening(false);
-            if (ok) audit.mutate();
-          }}
-        >
-          {t("Run the night audit")}
-        </Button>
-      </header>
-      <div className="hotel-columns">
-        <List title={t("Arriving")} stays={arriving} action={{ label: t("Check in"), name: "check_in" }} onAct={onAct} />
-        <List title={t("In the house")} stays={inHouse} onAct={onAct} />
-        <List title={t("Leaving")} stays={leaving} action={{ label: t("Check out"), name: "check_out" }} onAct={onAct} />
-      </div>
-      <section className="card card-pad stack" aria-label={t("Rooms")}>
-        <h3>{t("Rooms")}</h3>
-        <div className="hotel-rooms">
-          {rooms.data.map((r) => (
-            <Link key={r.id} className="hotel-room" to={`/e/Room/${r.id}`}>
-              <strong>{isolate(r.room_number)}</strong>
-              <div>
-                <Badge tone={TONE[r.housekeeping] ?? "neutral"}>{isolate(r.housekeeping)}</Badge> {r.occupied ? <Badge tone="blue">{t("Occupied")}</Badge> : null}
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
+      <PageHead
+        title={t("Front desk")}
+        description={`${nameLine} · ${t("Business date {bd}", { bd: dayText(bd) })}`}
+        actions={
+          <>
+            {picker}
+            <ButtonLink to="/housekeeping">{t("Housekeeping")}</ButtonLink>
+            <Button
+              loading={audit.isPending || opening}
+              onClick={async () => {
+                setOpening(true);
+                const ok = await confirmDialog({
+                  title: t("Close the night of {bd}?", { bd: dayText(bd) }),
+                  message: t("Room charges are posted to every stay in the house, reservations that did not arrive become no-shows, and the next day opens."),
+                  confirmLabel: t("Run the night audit"),
+                });
+                setOpening(false);
+                if (ok) audit.mutate();
+              }}
+            >
+              {t("Run the night audit")}
+            </Button>
+          </>
+        }
+      />
+      <QueueGrid>
+        <List title={t("Arriving")} stays={arriving} rooms={rooms.data} action={{ label: t("Check in"), name: "check_in" }} busy={busy} onAct={onAct} />
+        <List title={t("In the house")} stays={inHouse} rooms={rooms.data} busy={busy} onAct={onAct} />
+        <List title={t("Leaving")} stays={leaving} rooms={rooms.data} action={{ label: t("Check out"), name: "check_out" }} busy={busy} onAct={onAct} />
+      </QueueGrid>
+      <HomeSection title={t("Rooms")} count={rooms.data.length}>
+      <TileGrid label={t("Rooms")}>
+        {rooms.data.map((r) => (
+          <Tile key={r.id} to={`/e/Room/${r.id}`} title={isolate(r.room_number)} meta={r.occupied ? <span>{t("Occupied")}</span> : undefined} status={<StatusBadge value={r.housekeeping} tones={ROOM_TONES} />} />
+        ))}
+      </TileGrid>
+      </HomeSection>
     </>
   );
 }
 
 export function FrontDesk() {
-  useShellTitle(t("Front desk"));
   const q = useQuery({ queryKey: ["hotel", "properties"], queryFn: () => rows<Property>("HotelProperty", [], { sort: "property_name asc" }) });
   const [chosen, setChosen] = useState<string | null>(null);
-  if (q.isPending) return <PageLoading />;
-  if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
+  if (q.isPending)
+    return (
+      <>
+        <PageHead title={t("Front desk")} />
+        <HomeSkeleton />
+      </>
+    );
+  if (q.isError)
+    return (
+      <>
+        <PageHead title={t("Front desk")} />
+        <LoadFailed error={q.error} onRetry={() => void q.refetch()} />
+      </>
+    );
   if (q.data.length === 0)
     return (
-      <EmptyState title={t("No property yet")}>
-        <Link to="/e/HotelProperty/new">{t("Add your hotel")}</Link>
-      </EmptyState>
+      <>
+        <PageHead title={t("Front desk")} />
+        <StatePanel
+          kind="empty"
+          title={t("No property yet")}
+          action={
+            <ButtonLink to="/e/HotelProperty/new" variant="primary" icon="plus">
+              {t("Add your hotel")}
+            </ButtonLink>
+          }
+        />
+      </>
     );
   const property = q.data.find((p) => p.id === chosen) ?? q.data[0];
-  return (
-    <div className="hotel-page">
-      {q.data.length > 1 && (
-        <label className="row" style={{ gap: 8 }}>
-          {t("Property")}
-          <select className="select" value={property.id} onChange={(e) => setChosen(e.target.value)}>
-            {q.data.map((p) => (
-              <option key={p.id} value={p.id}>
-                {isolate(p.property_name)}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <Desk property={property} />
-    </div>
-  );
+  const picker =
+    q.data.length > 1 ? (
+      <label className="hotel-pick">
+        <span className="muted">{t("Property")}</span>
+        <select className="select" value={property.id} onChange={(e) => setChosen(e.target.value)}>
+          {q.data.map((p) => (
+            <option key={p.id} value={p.id}>
+              {isolate(p.property_name)}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : null;
+  return <Desk property={property} picker={picker} />;
 }

@@ -4,7 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, docPath, refusal, t, isolate } from "@ferrum/client";
-import { Badge, Button, EmptyState, ErrorState, PageLoading, toast, useShellTitle } from "@ferrum/kit";
+import { Button, HomeSkeleton, LoadFailed, PageHead, Queue, QueueGrid, QueueItem, StatePanel, StatusBadge, toast, type Tone } from "@ferrum/kit";
 
 export interface Task {
   id: string;
@@ -16,6 +16,9 @@ export interface Task {
   cleaned_by?: string | null;
 }
 
+/** HousekeepingTask.status as stored, for `statusTone`: still to do, or cleaned and waiting. */
+export const TASK_TONES: Readonly<Record<string, Tone>> = { "To Do": "amber", Cleaned: "green", Inspected: "green" };
+
 /** What a task's next step is: cleaning it, then (a departure only) inspecting it. */
 export function nextStep(task: Pick<Task, "kind" | "status">): { action: string; label: string } | null {
   if (task.status === "To Do") return { action: "cleaned", label: t("Cleaned") };
@@ -24,7 +27,6 @@ export function nextStep(task: Pick<Task, "kind" | "status">): { action: string;
 }
 
 export function Housekeeping() {
-  useShellTitle(t("Housekeeping"));
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["hotel", "housekeeping"],
@@ -46,39 +48,60 @@ export function Housekeeping() {
     },
     onError: (e) => toast(refusal(e), "error"),
   });
-  if (q.isPending) return <PageLoading />;
-  if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
+  if (q.isPending)
+    return (
+      <>
+        <PageHead title={t("Housekeeping")} back={{ to: "/", label: t("Front desk") }} />
+        <HomeSkeleton queues={2} />
+      </>
+    );
+  if (q.isError)
+    return (
+      <>
+        <PageHead title={t("Housekeeping")} back={{ to: "/", label: t("Front desk") }} />
+        <LoadFailed error={q.error} onRetry={() => void q.refetch()} />
+      </>
+    );
+  // A task is in the list it is in on the server: a step taken moves it only once the server has answered and the list is read again.
+  const todo = q.data.filter((x) => x.status === "To Do");
+  const cleaned = q.data.filter((x) => x.status === "Cleaned");
+  // The button names the step as an action ("Mark cleaned"), so it is not mistaken for the state beside it.
+  const stepWord = (action: string) => (action === "cleaned" ? t("Mark cleaned") : t("Mark inspected"));
+  const row = (task: Task) => {
+    const next = nextStep(task);
+    return (
+      <QueueItem
+        key={task.id}
+        title={t("Room {room}", { room: task.room_number })}
+        meta={`${isolate(task.kind)} · ${isolate(task.task_date)}${task.assigned_to ? ` · ${task.assigned_to}` : ""}`}
+        trailing={<StatusBadge value={task.status} tones={TASK_TONES} />}
+        action={
+          next ? (
+            <Button variant="primary" loading={step.isPending && step.variables?.id === task.id} onClick={() => step.mutate({ id: task.id, action: next.action })}>
+              {stepWord(next.action)}
+            </Button>
+          ) : undefined
+        }
+      />
+    );
+  };
   return (
-    <div className="hotel-page">
-      <h2>{t("Housekeeping")}</h2>
+    <>
+      <PageHead title={t("Housekeeping")} description={t("{n} to do", { n: todo.length })} back={{ to: "/", label: t("Front desk") }} />
       {q.data.length === 0 ? (
-        <EmptyState title={t("Every room is done")} icon="list">
-          <p className="muted">{t("Check-outs and the night audit put rooms here to clean.")}</p>
-        </EmptyState>
+        <StatePanel kind="empty" title={t("Every room is done")}>
+          {t("Check-outs and the night audit put rooms here to clean.")}
+        </StatePanel>
       ) : (
-        <div className="hotel-columns">
-          {q.data.map((task) => {
-            const next = nextStep(task);
-            return (
-              <section key={task.id} className="card card-pad stack" aria-label={t("Room {room}", { room: task.room_number })}>
-                <div className="row" style={{ justifyContent: "space-between" }}>
-                  <strong>{t("Room {room}", { room: task.room_number })}</strong>
-                  <Badge tone={task.status === "Cleaned" ? "green" : "amber"}>{isolate(task.status)}</Badge>
-                </div>
-                <div className="faint">
-                  {isolate(task.kind)} · {isolate(task.task_date)}
-                  {task.assigned_to ? ` · ${task.assigned_to}` : ""}
-                </div>
-                {next && (
-                  <Button size="sm" loading={step.isPending && step.variables?.id === task.id} onClick={() => step.mutate({ id: task.id, action: next.action })}>
-                    {isolate(next.label)}
-                  </Button>
-                )}
-              </section>
-            );
-          })}
-        </div>
+        <QueueGrid>
+          <Queue title={t("To clean")} count={todo.length}>
+            {todo.map(row)}
+          </Queue>
+          <Queue title={t("Cleaned")} count={cleaned.length}>
+            {cleaned.map(row)}
+          </Queue>
+        </QueueGrid>
       )}
-    </div>
+    </>
   );
 }

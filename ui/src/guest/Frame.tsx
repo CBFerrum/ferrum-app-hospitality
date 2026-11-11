@@ -3,7 +3,8 @@
 
 import type { ReactNode } from "react";
 import { ApiError, bootstrap, t, isolate } from "@ferrum/client";
-import { EmptyState, ErrorState } from "@ferrum/kit";
+import { CalendarDays } from "lucide-react";
+import { LoadFailed, StatePanel } from "@ferrum/kit";
 
 export function Frame({ children }: { children: ReactNode }) {
   const name = bootstrap()?.workspace.name;
@@ -26,14 +27,14 @@ export function Frame({ children }: { children: ReactNode }) {
 export function Closed({ error, what, onRetry }: { error: unknown; what: "page" | "link"; onRetry?: () => void }) {
   if (error instanceof ApiError && error.status === 404) {
     return what === "page" ? (
-      <EmptyState title={t("Rooms are not booked online here")} icon="calendar">
-        <p className="muted">{t("The address may not be quite right. Please get in touch with the hotel directly.")}</p>
-      </EmptyState>
+      <StatePanel kind="empty" title={t("Rooms are not booked online here")} icon={CalendarDays}>
+        {t("The address may not be quite right. Please get in touch with the hotel directly.")}
+      </StatePanel>
     ) : (
-      <EmptyState title={t("This link does not work")} icon="calendar">
-        <p className="muted">{t("A reservation's link stops working a month after the stay, and opens only the reservation it was made for.")}</p>
-      </EmptyState>
+      <StatePanel kind="empty" title={t("This link does not work")} icon={CalendarDays}>
+        {t("A reservation's link stops working a month after the stay, and opens only the reservation it was made for.")}
+      </StatePanel>
     );
   }
-  return <ErrorState error={error} onRetry={onRetry} title={t("We could not load this page")} />;
+  return <LoadFailed error={error} onRetry={onRetry} />;
 }
