@@ -4,7 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, docPath, refusal, t, isolate } from "@ferrum/client";
-import { Button, HomeSkeleton, LoadFailed, PageHead, Queue, QueueGrid, StatePanel, StatusBadge, toast } from "@ferrum/kit";
+import { Button, HomeSkeleton, LoadFailed, PageHead, Queue, QueueGrid, QueueItem, StatePanel, StatusBadge, toast, type Tone } from "@ferrum/kit";
 
 export interface Task {
   id: string;
@@ -17,7 +17,7 @@ export interface Task {
 }
 
 /** HousekeepingTask.status as stored, for `statusTone`: still to do, or cleaned and waiting. */
-export const TASK_TONES = { "To Do": "amber", Cleaned: "green", Inspected: "green" } as const;
+export const TASK_TONES: Readonly<Record<string, Tone>> = { "To Do": "amber", Cleaned: "green", Inspected: "green" };
 
 /** What a task's next step is: cleaning it, then (a departure only) inspecting it. */
 export function nextStep(task: Pick<Task, "kind" | "status">): { action: string; label: string } | null {
@@ -65,24 +65,24 @@ export function Housekeeping() {
   // A task is in the list it is in on the server: a step taken moves it only once the server has answered and the list is read again.
   const todo = q.data.filter((x) => x.status === "To Do");
   const cleaned = q.data.filter((x) => x.status === "Cleaned");
+  // The button names the step as an action ("Mark cleaned"), so it is not mistaken for the state beside it.
+  const stepWord = (action: string) => (action === "cleaned" ? t("Mark cleaned") : t("Mark inspected"));
   const row = (task: Task) => {
     const next = nextStep(task);
     return (
-      <li key={task.id} className="queue-item hk-task">
-        <div className="queue-text">
-          <span className="hk-room">{t("Room {room}", { room: task.room_number })}</span>
-          <span className="queue-meta hk-meta">
-            {isolate(task.kind)} · {isolate(task.task_date)}
-            {task.assigned_to ? ` · ${task.assigned_to}` : ""}
-          </span>
-        </div>
-        <StatusBadge value={task.status} tones={TASK_TONES} />
-        {next && (
-          <Button variant="primary" className="hk-act" loading={step.isPending && step.variables?.id === task.id} onClick={() => step.mutate({ id: task.id, action: next.action })}>
-            {isolate(next.label)}
-          </Button>
-        )}
-      </li>
+      <QueueItem
+        key={task.id}
+        title={t("Room {room}", { room: task.room_number })}
+        meta={`${isolate(task.kind)} · ${isolate(task.task_date)}${task.assigned_to ? ` · ${task.assigned_to}` : ""}`}
+        trailing={<StatusBadge value={task.status} tones={TASK_TONES} />}
+        action={
+          next ? (
+            <Button variant="primary" loading={step.isPending && step.variables?.id === task.id} onClick={() => step.mutate({ id: task.id, action: next.action })}>
+              {stepWord(next.action)}
+            </Button>
+          ) : undefined
+        }
+      />
     );
   };
   return (
@@ -93,7 +93,7 @@ export function Housekeeping() {
           {t("Check-outs and the night audit put rooms here to clean.")}
         </StatePanel>
       ) : (
-        <QueueGrid className="hk-grid">
+        <QueueGrid>
           <Queue title={t("To clean")} count={todo.length}>
             {todo.map(row)}
           </Queue>
