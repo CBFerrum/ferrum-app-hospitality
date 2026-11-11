@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useParams } from "react-router";
 import { refusal, t, isolate } from "@ferrum/client";
-import { Alert, Badge, Button, confirmDialog, Field, PageLoading } from "@ferrum/kit";
+import { Alert, Badge, Button, confirmDialog, Field, ReaderSkeleton } from "@ferrum/kit";
 import { Closed, Frame } from "./Frame";
 import { cancel, mine, type Reservation } from "./site";
 
@@ -25,7 +25,7 @@ export function ManageRoute() {
   if (q.isPending)
     return (
       <Frame>
-        <PageLoading />
+        <ReaderSkeleton />
       </Frame>
     );
   if (q.isError)

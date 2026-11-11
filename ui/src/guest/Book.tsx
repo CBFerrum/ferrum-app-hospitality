@@ -7,7 +7,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { Link, useParams } from "react-router";
 import { refusal, t, isolate } from "@ferrum/client";
-import { Alert, Button, Field, PageLoading } from "@ferrum/kit";
+import { Alert, Button, Field, FormSkeleton } from "@ferrum/kit";
 import { Closed, Frame } from "./Frame";
 import { availability, book, type Booked, dayAfter, manageLink, type Offer, properties, type Search } from "./site";
 
@@ -17,7 +17,7 @@ export function BookPage() {
   if (hotels.isPending)
     return (
       <Frame>
-        <PageLoading />
+        <FormSkeleton />
       </Frame>
     );
   if (hotels.isError)
