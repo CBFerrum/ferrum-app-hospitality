@@ -4,25 +4,6 @@
 @source "../../../ferrum/web/src";
 @source ".";
 
-/* The desk's rows: the room number leads, one width per digit so a column of rooms lines up. */
-.hotel-room-no {
-  display: inline-block;
-  min-width: 3.5ch;
-  margin-inline-end: 8px;
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-
-.hotel-meta {
-  padding-inline-start: calc(3.5ch + 8px);
-}
-
-.hotel-act,
-.hk-act {
-  position: relative; /* above the row's stretched link */
-  flex: none;
-}
-
 .hotel-pick {
   display: flex;
   align-items: center;
@@ -32,39 +13,6 @@
 
 .hotel-pick .select {
   width: auto;
-}
-
-.hotel-h {
-  margin-block: 24px 12px;
-  font-size: var(--text-base);
-  font-weight: 600;
-}
-
-/* Housekeeping, used standing up on a phone: the room first and large, the step one full-width button of its own. */
-.hk-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
-}
-
-.hk-task {
-  flex-wrap: wrap;
-  row-gap: 8px;
-  padding-block: 12px;
-}
-
-.hk-room {
-  font-size: var(--text-lg);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.hk-act {
-  flex-basis: 100%;
-}
-
-@media (min-width: 640px) {
-  .hk-act {
-    flex-basis: auto;
-  }
 }
 
 /* The public booking page: a column that reads on a phone. */

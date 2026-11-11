@@ -4,9 +4,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { Link } from "react-router";
 import { api, docPath, formatValue, refusal, t, isolate } from "@ferrum/client";
-import { Button, ButtonLink, confirmDialog, HomeSkeleton, LoadFailed, PageHead, Queue, QueueGrid, StatePanel, StatusBadge, Tile, TileGrid, toast } from "@ferrum/kit";
+import { Button, ButtonLink, confirmDialog, HomeSection, HomeSkeleton, LoadFailed, PageHead, Queue, QueueGrid, QueueItem, StatePanel, StatusBadge, Tile, TileGrid, toast, type Tone } from "@ferrum/kit";
 
 interface Property {
   id: string;
@@ -39,7 +38,7 @@ const act = (entity: string, id: string, action: string, params: unknown = {}) =
 
 /** Room.housekeeping as stored (packages/hospitality/entities), for `statusTone`: four states, four tones, and the word
  *  is always shown beside it. */
-export const ROOM_TONES = { Clean: "blue", Inspected: "green", Dirty: "amber", "Out of Order": "red" } as const;
+export const ROOM_TONES: Readonly<Record<string, Tone>> = { Clean: "blue", Inspected: "green", Dirty: "amber", "Out of Order": "red" };
 
 /** A day as the person reads it ("11 Nov 2026"). */
 const dayText = (v: string) => formatValue({ type: "date" }, v);
@@ -50,35 +49,24 @@ export const shortDay = (v: string): string => new Intl.DateTimeFormat(typeof do
 /** The number of the room a stay holds (its `room` is the room's id); empty until one is given. */
 export const roomNumber = (stay: Pick<Stay, "room">, rooms: Pick<Room, "id" | "room_number">[]): string => rooms.find((r) => r.id === stay.room)?.room_number ?? "";
 
-/** A queue row of the desk: the room number leads (one width per digit, so a column of rooms lines up), then the guest, the
- *  stay's number and nights beneath, and the step the desk takes at the end. The name is the row's link to the stay; the
- *  button sits above it. */
-function DeskRow({ stay, room, action, busy, onAct }: { stay: Stay; room: string; action?: { label: string; name: string }; busy: boolean; onAct: (s: Stay, name: string) => void }) {
-  return (
-    <li className="queue-item">
-      <div className="queue-text">
-        <Link className="queue-name" to={`/e/Stay/${stay.id}`} title={stay.guest_name}>
-          <span className="hotel-room-no">{isolate(room)}</span>
-          {isolate(stay.guest_name)}
-        </Link>
-        <span className="queue-meta hotel-meta">
-          {isolate(stay.number)} · {t("{arrival} to {departure}", { arrival: shortDay(stay.arrival), departure: shortDay(stay.departure) })}
-        </span>
-      </div>
-      {action && (
-        <Button size="sm" className="hotel-act" loading={busy} onClick={() => onAct(stay, action.name)}>
-          {isolate(action.label)}
-        </Button>
-      )}
-    </li>
-  );
-}
-
 function List({ title, stays, rooms, action, busy, onAct }: { title: string; stays: Stay[]; rooms: Room[]; action?: { label: string; name: string }; busy: string | null; onAct: (s: Stay, name: string) => void }) {
   return (
     <Queue title={title} count={stays.length} empty={t("Nobody.")}>
       {stays.map((s) => (
-        <DeskRow key={s.id} stay={s} room={roomNumber(s, rooms)} action={action} busy={busy === s.id} onAct={onAct} />
+        <QueueItem
+          key={s.id}
+          to={`/e/Stay/${s.id}`}
+          lead={isolate(roomNumber(s, rooms)) || "—"}
+          title={isolate(s.guest_name)}
+          meta={`${isolate(s.number)} · ${t("{arrival} to {departure}", { arrival: shortDay(s.arrival), departure: shortDay(s.departure) })}`}
+          action={
+            action ? (
+              <Button size="sm" loading={busy === s.id} onClick={() => onAct(s, action.name)}>
+                {isolate(action.label)}
+              </Button>
+            ) : undefined
+          }
+        />
       ))}
     </Queue>
   );
@@ -175,17 +163,18 @@ function Desk({ property, picker }: { property: Property; picker: ReactNode }) {
           </>
         }
       />
-      <QueueGrid className="hotel-desk">
+      <QueueGrid>
         <List title={t("Arriving")} stays={arriving} rooms={rooms.data} action={{ label: t("Check in"), name: "check_in" }} busy={busy} onAct={onAct} />
         <List title={t("In the house")} stays={inHouse} rooms={rooms.data} busy={busy} onAct={onAct} />
         <List title={t("Leaving")} stays={leaving} rooms={rooms.data} action={{ label: t("Check out"), name: "check_out" }} busy={busy} onAct={onAct} />
       </QueueGrid>
-      <h2 className="hotel-h">{t("Rooms")}</h2>
-      <TileGrid label={t("Rooms")} className="hotel-rooms">
+      <HomeSection title={t("Rooms")} count={rooms.data.length}>
+      <TileGrid label={t("Rooms")}>
         {rooms.data.map((r) => (
           <Tile key={r.id} to={`/e/Room/${r.id}`} title={isolate(r.room_number)} meta={r.occupied ? <span>{t("Occupied")}</span> : undefined} status={<StatusBadge value={r.housekeeping} tones={ROOM_TONES} />} />
         ))}
       </TileGrid>
+      </HomeSection>
     </>
   );
 }
