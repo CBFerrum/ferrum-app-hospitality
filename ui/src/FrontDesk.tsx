@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
 import { api, docPath, refusal, t, isolate } from "@ferrum/client";
-import { Badge, Button, confirmDialog, EmptyState, ErrorState, PageLoading, toast, useShellTitle } from "@ferrum/kit";
+import { Badge, Button, confirmDialog, EmptyState, ErrorState, ListSkeleton, toast, useShellTitle } from "@ferrum/kit";
 
 interface Property {
   id: string;
@@ -104,7 +104,7 @@ function Desk({ property }: { property: Property }) {
         <Link to={`/e/HotelProperty/${property.id}`}>{t("Open {property_name}", { property_name: property.property_name })}</Link>
       </EmptyState>
     );
-  if (stays.isPending || rooms.isPending) return <PageLoading />;
+  if (stays.isPending || rooms.isPending) return <ListSkeleton className="hotel-page" />;
   if (stays.isError) return <ErrorState error={stays.error} onRetry={() => void stays.refetch()} />;
   if (rooms.isError) return <ErrorState error={rooms.error} onRetry={() => void rooms.refetch()} />;
   const arriving = stays.data.filter((s) => s.status === "Reserved" && s.arrival <= bd);
@@ -162,7 +162,7 @@ export function FrontDesk() {
   useShellTitle(t("Front desk"));
   const q = useQuery({ queryKey: ["hotel", "properties"], queryFn: () => rows<Property>("HotelProperty", [], { sort: "property_name asc" }) });
   const [chosen, setChosen] = useState<string | null>(null);
-  if (q.isPending) return <PageLoading />;
+  if (q.isPending) return <ListSkeleton className="hotel-page" />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   if (q.data.length === 0)
     return (

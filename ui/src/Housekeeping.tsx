@@ -4,7 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, docPath, refusal, t, isolate } from "@ferrum/client";
-import { Badge, Button, EmptyState, ErrorState, PageLoading, toast, useShellTitle } from "@ferrum/kit";
+import { Badge, Button, EmptyState, ErrorState, ListSkeleton, toast, useShellTitle } from "@ferrum/kit";
 
 export interface Task {
   id: string;
@@ -46,7 +46,7 @@ export function Housekeeping() {
     },
     onError: (e) => toast(refusal(e), "error"),
   });
-  if (q.isPending) return <PageLoading />;
+  if (q.isPending) return <ListSkeleton className="hotel-page" />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   return (
     <div className="hotel-page">
