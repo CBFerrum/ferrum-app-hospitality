@@ -5,9 +5,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useParams } from "react-router";
 import { refusal, t, isolate } from "@ferrum/client";
-import { Alert, Badge, Button, confirmDialog, Field, ReaderSkeleton } from "@ferrum/kit";
+import { Alert, Button, confirmDialog, Field, PageHead, ReaderSkeleton, StatusBadge } from "@ferrum/kit";
 import { Closed, Frame } from "./Frame";
 import { cancel, mine, type Reservation } from "./site";
+
+/** Stay.status as stored, for `statusTone`: only a reservation still to come is green. */
+export const RESERVATION_TONES = { Reserved: "green", Cancelled: "red" } as const;
 
 export function ManageRoute() {
   const { tenant = "", token = "" } = useParams();
@@ -37,11 +40,8 @@ export function ManageRoute() {
   const r: Reservation = q.data.reservation;
   return (
     <Frame>
+      <PageHead title={isolate(r.number)} actions={<span className="hb-head-badge"><StatusBadge value={r.status} tones={RESERVATION_TONES} /></span>} />
       <section className="card card-pad stack" aria-label={t("Your reservation")}>
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <h1>{isolate(r.number)}</h1>
-          <Badge tone={r.status === "Reserved" ? "green" : r.status === "Cancelled" ? "red" : "neutral"}>{isolate(r.status)}</Badge>
-        </div>
         <p>
           {t("{room_type} at {property}, {arrival} to {departure}.", { room_type: r.room_type ?? "", property: r.property, arrival: r.arrival, departure: r.departure })}
         </p>

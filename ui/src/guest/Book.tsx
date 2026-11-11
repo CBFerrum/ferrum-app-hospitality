@@ -5,9 +5,9 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
 import { refusal, t, isolate } from "@ferrum/client";
-import { Alert, Button, Field, FormSkeleton } from "@ferrum/kit";
+import { Alert, Button, ButtonLink, Field, FormSkeleton, PageHead } from "@ferrum/kit";
 import { Closed, Frame } from "./Frame";
 import { availability, book, type Booked, dayAfter, manageLink, type Offer, properties, type Search } from "./site";
 
@@ -52,7 +52,7 @@ function Booking({ tenant, hotels }: { tenant: string; hotels: { code: string; n
   };
   return (
     <div className="stack">
-      <h1>{t("Book a room")}</h1>
+      <PageHead title={t("Book a room")} />
       <form className="card card-pad stack" onSubmit={search} aria-label={t("Dates and guests")}>
         {hotels.length > 1 && (
           <Field label={t("Hotel")}>
@@ -99,9 +99,9 @@ function Booking({ tenant, hotels }: { tenant: string; hotels: { code: string; n
               </p>
               {offers.data.offers.map((o) => (
                 <article key={o.room_type} className="card card-pad stack" aria-label={o.name}>
-                  <div className="row" style={{ justifyContent: "space-between" }}>
+                  <div className="hb-offer">
                     <h2>{isolate(o.name)}</h2>
-                    <strong>{isolate(o.total)}</strong>
+                    <strong className="num-inline">{isolate(o.total)}</strong>
                   </div>
                   <div className="faint">
                     {t("Sleeps {sleeps} · {nights} nights · deposit {deposit}", { sleeps: o.sleeps, nights: offers.data.nights, deposit: o.deposit })}
@@ -167,14 +167,20 @@ function Done({ tenant, booked }: { tenant: string; booked: Booked }) {
   if (!("reservation" in booked)) return <Alert tone="success">{t("Thank you: your request is in.")}</Alert>;
   const r = booked.reservation;
   return (
-    <section className="card card-pad stack" aria-label={t("Booked")}>
-      <h1>{t("Booked: {number}", { number: r.number })}</h1>
+    <>
+      <PageHead title={t("Booked: {number}", { number: r.number })} />
+      <section className="card card-pad stack" aria-label={t("Booked")}>
       <p>
         {t("{room_type} at {property}, {arrival} to {departure}.", { room_type: r.room_type ?? "", property: r.property, arrival: r.arrival, departure: r.departure })}
       </p>
       <p>{t("Total {total}; deposit {deposit}, taken by the hotel.", { total: r.total, deposit: r.deposit_due ?? "0" })}</p>
       <p className="muted">{t("Keep your reservation's link: it is how you see or cancel it.")}</p>
-      <Link to={manageLink(tenant, booked.token)}>{t("Your reservation")}</Link>
-    </section>
+      <div>
+        <ButtonLink to={manageLink(tenant, booked.token)} variant="primary">
+          {t("Your reservation")}
+        </ButtonLink>
+      </div>
+      </section>
+    </>
   );
 }
