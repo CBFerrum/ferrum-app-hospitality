@@ -38,6 +38,8 @@
   "Its nights are given up.": "تُترك لياليه.",
   "Keep your reservation's link: it is how you see or cancel it.": "احتفظ برابط حجزك: به تراه أو تلغيه.",
   "Leaving": "المغادرون",
+  "Mark cleaned": "علّمها نُظّفت",
+  "Mark inspected": "علّمها مفحوصة",
   "Name": "الاسم",
   "No property yet": "لا منشأة بعد",
   "No room is free for every night of these dates. Try other dates.": "لا توجد غرفة متاحة لكل ليالي هذه التواريخ. جرّب تواريخ أخرى.",
@@ -62,9 +64,9 @@
   "The hotel has no business date yet": "ليس للفندق تاريخ عمل بعد",
   "The night of {value} is closed: {value2} rooms charged, {value3} no-shows": "أُقفلت ليلة {value}: فُوترت {value2} غرف، و{value3} لم يحضروا",
   "This link does not work": "هذا الرابط لا يعمل",
+  "To clean": "للتنظيف",
   "Total {total}; deposit {deposit}, of which {paid} is paid.": "الإجمالي {total}؛ العربون {deposit}، دُفع منه {paid}.",
   "Total {total}; deposit {deposit}, taken by the hotel.": "الإجمالي {total}؛ العربون {deposit}، يأخذه الفندق.",
-  "We could not load this page": "تعذّر تحميل هذه الصفحة",
   "Where your reservation is sent": "حيث يُرسل حجزك",
   "Why you are cancelling (optional)": "سبب الإلغاء (اختياري)",
   "Your deposit is being given back.": "يجري ردّ عربونك.",
@@ -74,5 +76,6 @@
   "{arrival} to {departure}": "من {arrival} إلى {departure}",
   "{guest_name} has left": "غادر {guest_name}",
   "{guest_name} is in": "وصل {guest_name}",
+  "{n} to do": "{n} للإنجاز",
   "{room_type} at {property}, {arrival} to {departure}.": "{room_type} في {property}، من {arrival} إلى {departure}."
 }

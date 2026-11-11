@@ -4,28 +4,15 @@
 @source "../../../ferrum/web/src";
 @source ".";
 
-.hotel-page {
-  display: grid;
-  gap: 16px;
-  padding: 16px;
+.hotel-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
 }
 
-.hotel-columns {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-}
-
-.hotel-rooms {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-}
-
-.hotel-room {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px;
+.hotel-pick .select {
+  width: auto;
 }
 
 /* The public booking page: a column that reads on a phone. */
@@ -53,6 +40,24 @@
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.hb-offer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hb-offer h2 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.hb-head-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-h);
 }
 
 .hb-trap {

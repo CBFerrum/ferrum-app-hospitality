@@ -38,6 +38,8 @@
   "Its nights are given up.": "इसकी रातें छोड़ दी जाती हैं।",
   "Keep your reservation's link: it is how you see or cancel it.": "अपने आरक्षण का लिंक रखें: इसी से आप उसे देख या रद्द कर सकते हैं।",
   "Leaving": "जाने वाले",
+  "Mark cleaned": "साफ़ चिह्नित करें",
+  "Mark inspected": "जाँची हुई चिह्नित करें",
   "Name": "नाम",
   "No property yet": "अभी कोई प्रॉपर्टी नहीं",
   "No room is free for every night of these dates. Try other dates.": "इन तारीखों की हर रात के लिए कोई कमरा खाली नहीं है। अन्य तारीखें आज़माएँ।",
@@ -62,9 +64,9 @@
   "The hotel has no business date yet": "होटल की अभी कोई व्यावसायिक तिथि नहीं है",
   "The night of {value} is closed: {value2} rooms charged, {value3} no-shows": "{value} की रात बंद हुई: {value2} कमरों पर शुल्क, {value3} नहीं आए",
   "This link does not work": "यह लिंक काम नहीं करता",
+  "To clean": "साफ़ करने को",
   "Total {total}; deposit {deposit}, of which {paid} is paid.": "कुल {total}; जमा {deposit}, जिसमें से {paid} चुकाया गया।",
   "Total {total}; deposit {deposit}, taken by the hotel.": "कुल {total}; जमा {deposit}, होटल द्वारा लिया जाएगा।",
-  "We could not load this page": "हम यह पेज लोड नहीं कर सके",
   "Where your reservation is sent": "जहाँ आपका आरक्षण भेजा जाता है",
   "Why you are cancelling (optional)": "रद्द करने का कारण (वैकल्पिक)",
   "Your deposit is being given back.": "आपकी जमा राशि लौटाई जा रही है।",
@@ -74,5 +76,6 @@
   "{arrival} to {departure}": "{arrival} से {departure}",
   "{guest_name} has left": "{guest_name} चले गए",
   "{guest_name} is in": "{guest_name} आ गए",
+  "{n} to do": "{n} करने को",
   "{room_type} at {property}, {arrival} to {departure}.": "{property} में {room_type}, {arrival} से {departure} तक।"
 }
