@@ -95,6 +95,7 @@ cancellation that frees the night, and who may do what.
 
 | Version | Highlights |
 |---|---|
+| **0.3.2** | Rebuilt on the tuned design system: better menu icons, a lighter first page, a visible scroll cue, cleaner print. |
 | **0.3.1** | The redesigned interface: the upgraded design system, shaped loading, told-apart states. |
 | **0.3.0** | Deposits by the rate plan's policy, kept for late cancellations and no-shows; housekeeping tasks cleaned and inspected; outlets' charges on a guest's room; a public booking page with the guest's own link (FEO-045). |
 | **0.2.11** | Its names in Arabic and Hindi. |
