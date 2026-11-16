@@ -44,6 +44,7 @@ export const ROOM_TONES: Readonly<Record<string, Tone>> = { Clean: "blue", Inspe
 const dayText = (v: string) => formatValue({ type: "date" }, v);
 
 /** A stay's day in a row, without its year ("14 Nov"): the desk works within days of the business date, and a row is narrow. */
+// ui-lint-allow browser-zone: a stay's day has no time, and is built and written on the same local calendar, so never shifted
 export const shortDay = (v: string): string => new Intl.DateTimeFormat(typeof document === "undefined" ? "en" : document.documentElement.lang || undefined, { day: "numeric", month: "short" }).format(new Date(`${v}T00:00:00`));
 
 /** The number of the room a stay holds (its `room` is the room's id); empty until one is given. */
