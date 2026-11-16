@@ -111,7 +111,7 @@ async fn scenario() {
     let catalog = Catalog::from_packages(packages).expect("catalog");
     let mut hooks = HookRegistry::default();
     ferrum_domain::register(&mut hooks);
-    ferrum_app_erp::register(&mut hooks);
+    hooks.app("erp", &[], ferrum_app_erp::register);
     ferrum_app_hospitality::register(&mut hooks);
     let page = hooks.site("hospitality").cloned().expect("the booking page");
     let settings = KernelSettings { secret_key: Some(SecretKey::new([7u8; 32])), ..Default::default() };
