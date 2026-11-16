@@ -8,7 +8,6 @@
 //! guest's room; deposits given back or kept by the rate plan's policy, and a no-show's kept; the
 //! public booking page; and who may do what.
 
-use ferrum_kernel::secret::SecretKey;
 use ferrum_kernel::tenant::NewTenant;
 use ferrum_kernel::{Ctx, Db, DbConfig, Doc, Error, HookRegistry, Kernel, KernelSettings, ListQuery, Site, SiteRequest};
 use ferrum_meta::Catalog;
@@ -114,8 +113,7 @@ async fn scenario() {
     hooks.app("erp", &[], ferrum_app_erp::register);
     ferrum_app_hospitality::register(&mut hooks);
     let page = hooks.site("hospitality").cloned().expect("the booking page");
-    let settings = KernelSettings { secret_key: Some(SecretKey::new([7u8; 32])), ..Default::default() };
-    let k = Kernel::boot(db, catalog, hooks, settings, None).await.expect("boot");
+    let k = Kernel::boot(db, catalog, hooks, KernelSettings::default(), None).await.expect("boot");
     ferrum_domain::maintenance(&k).await.expect("partitions");
     ferrum_app_erp::maintenance(&k).await.expect("partitions");
     let tenant = k
