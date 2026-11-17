@@ -15,6 +15,3 @@ What this app took from elsewhere, and on what terms.
     that covers it, and a room type is not sold past its rooms on any night.
 - Not taken, because the module has none: rooms assigned to stays, check-in and check-out, folios,
   the night audit, no-shows, occupancy, ADR and RevPAR. Those, and all the code, are this app's own.
-
-The copy read is in `ERP/referance/industry/erpnext-v12` on the machine this was written on, sparse
-(only `erpnext/hotels` and `erpnext/restaurant`).

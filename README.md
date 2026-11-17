@@ -37,7 +37,7 @@ Ferrum Hospitality is for small and mid-size hotels, guesthouses and serviced ap
 
 | | |
 |---|---|
-| **Version** | 0.3.2 |
+| **Version** | 0.3.3 |
 | **Kind** | Its own interface at `/hotel/` (front desk and housekeeping) with the records screens for the rest, and a public booking page at `/hotel/book/{workspace}` |
 | **What it adds** | 14 entities (9 you work with, 5 that sit inside them), 5 roles, 1 menu module, 1 package. It has no reports or print formats of its own: the Night Audit records are its figures |
 | **Depends on** | Ferrum platform `>=0.3.2, <0.4` and [ERP](https://github.com/CBFerrum/ferrum-app-erp) `>=0.1` (selling and accounting) |
@@ -302,6 +302,7 @@ Leaders: Oracle OPERA Cloud, Mews, Cloudbeds, Apaleo and QloApps (open source).
 
 ### ✅ Recently shipped
 
+- [x] **0.3.3:** the interface starts through the frontend's `mountApp`; no routes to the screens apps no longer have.
 - [x] **0.3.2:** the interface on the tuned design system, with better menu icons and cleaner print.
 - [x] **0.3.1:** the redesigned interface, with the front desk on the work-home pattern.
 - [x] **0.3.0:** deposits by the rate plan's policy, kept for late cancellations and no-shows; housekeeping tasks cleaned and inspected; outlets' charges on a guest's room; a public booking page with the guest's own link.
