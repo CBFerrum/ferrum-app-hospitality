@@ -57,8 +57,9 @@ pub fn reports() -> Vec<Arc<dyn ReportSource>> {
     vec![]
 }
 
-/// Upkeep: nothing runs by itself. The night audit is the front office's to run.
-pub async fn maintenance(_k: &Kernel) -> Result<()> {
+/// One workspace's upkeep, which the platform runs where Hospitality is installed: nothing runs by itself. The night
+/// audit is the front office's to run.
+pub async fn maintenance(_k: &Kernel, _tenant: uuid::Uuid) -> Result<()> {
     Ok(())
 }
 
